@@ -1,0 +1,193 @@
+import { FontAwesome5 } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'; // นำเข้า router
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { db } from '../services/db'; // แก้ path เล็กน้อยเพราะออกมาอยู่นอก (tabs)
+
+interface Store {
+  id: number;
+  name: string;
+}
+
+export default function ManageStoresScreen() {
+  const router = useRouter(); // เรียกใช้ router สำหรับย้อนกลับ
+  const [stores, setStores] = useState<Store[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingStore, setEditingStore] = useState<Store | null>(null);
+  const [inputText, setInputText] = useState('');
+
+  useEffect(() => {
+    loadStores();
+  }, []);
+
+  const loadStores = async () => {
+    try {
+      const result: Store[] = await db.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
+      setStores(result);
+    } catch (error) {
+      console.error("Load stores error", error);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!inputText.trim()) return;
+    try {
+      if (editingStore) {
+        await db.runAsync('UPDATE stores SET name = ? WHERE id = ?', [inputText.trim(), editingStore.id]);
+      } else {
+        await db.runAsync('INSERT INTO stores (name) VALUES (?)', [inputText.trim()]);
+      }
+      setInputText('');
+      setEditingStore(null);
+      setModalVisible(false);
+      loadStores();
+    } catch (error) {
+      Alert.alert("Error", "ชื่อร้านนี้อาจจะมีอยู่แล้ว");
+    }
+  };
+
+  const confirmDelete = (store: Store) => {
+    Alert.alert(
+      "ลบร้านค้า",
+      `คุณต้องการลบร้าน "${store.name}" ใช่หรือไม่?`,
+      [
+        { text: "ยกเลิก", style: "cancel" },
+        { 
+          text: "ลบ", 
+          style: "destructive", 
+          onPress: async () => {
+            await db.runAsync('DELETE FROM stores WHERE id = ?', [store.id]);
+            loadStores();
+          } 
+        }
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.customHeader}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <FontAwesome5 name="chevron-left" size={20} color="#1f2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>จัดการรายชื่อร้านค้า</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <View style={styles.content}>
+        <FlatList
+          data={stores}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <View style={styles.listItem}>
+              <Text style={styles.storeName}>{item.name}</Text>
+              <View style={styles.actions}>
+                <TouchableOpacity onPress={() => { setEditingStore(item); setInputText(item.name); setModalVisible(true); }} style={styles.iconBtn}>
+                  <FontAwesome5 name="edit" size={16} color="#6b7280" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => confirmDelete(item)} style={styles.iconBtn}>
+                  <FontAwesome5 name="trash-alt" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          contentContainerStyle={styles.listPadding}
+        />
+      </View>
+
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={() => { setEditingStore(null); setInputText(''); setModalVisible(true); }}
+      >
+        <FontAwesome5 name="plus" size={20} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal visible={modalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editingStore ? 'แก้ไขชื่อร้าน' : 'เพิ่มร้านใหม่'}</Text>
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="พิมพ์ชื่อร้านที่นี่..."
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+                <Text style={styles.btnTextSave}>บันทึกข้อมูล</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  customHeader: {
+    height: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  backButton: { width: 40, height: 40, justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
+  content: { flex: 1 },
+  listPadding: { padding: 16, paddingBottom: 100 },
+  listItem: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5
+  },
+  storeName: { fontSize: 16, color: '#374151', fontWeight: '500' },
+  actions: { flexDirection: 'row' },
+  iconBtn: { padding: 8, marginLeft: 12 },
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    backgroundColor: '#10b981',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
+  input: { backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20 },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
+  btnCancel: { flex: 1, padding: 15, alignItems: 'center' },
+  btnSave: { flex: 1, backgroundColor: '#10b981', padding: 15, borderRadius: 12, alignItems: 'center' },
+  btnTextCancel: { color: '#6b7280', fontWeight: '600' },
+  btnTextSave: { color: '#fff', fontWeight: 'bold' }
+});
