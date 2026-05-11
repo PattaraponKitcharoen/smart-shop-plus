@@ -373,8 +373,6 @@ export default function AddItemScreen() {
             </View>
           )}
         </View>
-
-        // 🚩 แก้ไขส่วน renderFormContent (เฉพาะส่วนข้อ 4 ราคา & จำนวน)
         
         {/* 4. ราคา & จำนวน */}
         <View style={[styles.row, { marginBottom: 20 }]}>
