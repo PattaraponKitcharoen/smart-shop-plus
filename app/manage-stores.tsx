@@ -1,10 +1,11 @@
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router'; // นำเข้า router
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
   Modal,
+  Platform, // 🚩 เพิ่ม Platform
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDB } from '../services/db';
+import { getDB, initDatabase } from '../services/db'; // 🚩 เพิ่ม initDatabase
 
 interface Store {
   id: number;
@@ -20,66 +21,82 @@ interface Store {
 }
 
 export default function ManageStoresScreen() {
-  const router = useRouter(); // เรียกใช้ router สำหรับย้อนกลับ
+  const router = useRouter();
   const [stores, setStores] = useState<Store[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [inputText, setInputText] = useState('');
+  const [isDbReady, setIsDbReady] = useState(false); // เช็คความพร้อม DB
 
   useEffect(() => {
-    loadStores();
+    const prepare = async () => {
+      try {
+        await initDatabase();
+        setIsDbReady(true);
+        await loadStores();
+      } catch (e) {
+        console.error("Load stores error", e);
+      }
+    };
+    prepare();
   }, []);
 
   const loadStores = async () => {
-  try {
-    const database = getDB(); // 🚩 ดึง instance มาก่อน
-    const result: Store[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
-    setStores(result);
-  } catch (error) {
-    console.error("Load stores error", error);
-  }
-};
+    try {
+      const database = getDB();
+      // ดึงข้อมูลและกรองค่าว่างออกเพื่อความคลีน
+      const result: Store[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
+      setStores(result.filter(s => s.name && s.name.trim() !== ""));
+    } catch (error) {
+      console.error("Load stores error", error);
+    }
+  };
 
   const handleSave = async () => {
-  if (!inputText.trim()) return;
-  try {
-    const database = getDB(); // 🚩 ดึง instance มาก่อน
-    if (editingStore) {
-      await database.runAsync('UPDATE stores SET name = ? WHERE id = ?', [inputText.trim(), editingStore.id]);
-    } else {
-      await database.runAsync('INSERT INTO stores (name) VALUES (?)', [inputText.trim()]);
+    if (!inputText.trim() || !isDbReady) return;
+    try {
+      const database = getDB();
+      if (editingStore) {
+        await database.runAsync('UPDATE stores SET name = ? WHERE id = ?', [inputText.trim(), editingStore.id]);
+      } else {
+        await database.runAsync('INSERT INTO stores (name) VALUES (?)', [inputText.trim()]);
+      }
+      setInputText('');
+      setEditingStore(null);
+      setModalVisible(false);
+      await loadStores();
+    } catch (error) {
+      const msg = "ชื่อร้านนี้อาจจะมีอยู่แล้ว";
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert("Error", msg);
     }
-    setInputText('');
-    setEditingStore(null);
-    setModalVisible(false);
-    await loadStores(); // 🚩 อย่าลืมเติม await
-  } catch (error) {
-    Alert.alert("Error", "ชื่อร้านนี้อาจจะมีอยู่แล้ว");
-  }
-};
+  };
 
   const confirmDelete = (store: Store) => {
-    Alert.alert(
-      "ลบร้านค้า",
-      `คุณต้องการลบร้าน "${store.name}" ใช่หรือไม่?`,
-      [
+    const msg = `คุณต้องการลบร้าน "${store.name}" ใช่หรือไม่?`;
+
+    const performDelete = async () => {
+      try {
+        const database = getDB();
+        await database.runAsync('DELETE FROM stores WHERE id = ?', [store.id]);
+        await loadStores();
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // 🚩 สำหรับ Web ใช้ window.confirm
+      if (window.confirm(msg)) {
+        performDelete();
+      }
+    } else {
+      // สำหรับ Mobile ใช้ Alert.alert
+      Alert.alert("ลบร้านค้า", msg, [
         { text: "ยกเลิก", style: "cancel" },
-        { 
-          text: "ลบ", 
-          style: "destructive", 
-          // 🚩 ในส่วน onPress ภายใน Alert.alert
-onPress: async () => {
-  try {
-    const database = getDB(); // 🚩 ดึง instance มา
-    await database.runAsync('DELETE FROM stores WHERE id = ?', [store.id]);
-    await loadStores();
-  } catch (error) {
-    console.error(error);
-  }
-}
-        }
-      ]
-    );
+        { text: "ลบ", style: "destructive", onPress: performDelete }
+      ]);
+    }
   };
 
   return (
@@ -100,7 +117,10 @@ onPress: async () => {
             <View style={styles.listItem}>
               <Text style={styles.storeName}>{item.name}</Text>
               <View style={styles.actions}>
-                <TouchableOpacity onPress={() => { setEditingStore(item); setInputText(item.name); setModalVisible(true); }} style={styles.iconBtn}>
+                <TouchableOpacity 
+                  onPress={() => { setEditingStore(item); setInputText(item.name); setModalVisible(true); }} 
+                  style={styles.iconBtn}
+                >
                   <FontAwesome5 name="edit" size={16} color="#6b7280" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => confirmDelete(item)} style={styles.iconBtn}>
@@ -110,17 +130,23 @@ onPress: async () => {
             </View>
           )}
           contentContainerStyle={styles.listPadding}
+          ListEmptyComponent={
+            <Text style={{ textAlign: 'center', marginTop: 40, color: '#9ca3af' }}>
+               {isDbReady ? "ไม่มีรายชื่อร้านค้า" : "กำลังโหลด..."}
+            </Text>
+          }
         />
       </View>
 
       <TouchableOpacity 
-        style={styles.fab}
-        onPress={() => { setEditingStore(null); setInputText(''); setModalVisible(true); }}
+        style={[styles.fab, !isDbReady && { opacity: 0.5 }]}
+        onPress={() => { if(isDbReady) { setEditingStore(null); setInputText(''); setModalVisible(true); } }}
+        disabled={!isDbReady}
       >
         <FontAwesome5 name="plus" size={20} color="#fff" />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingStore ? 'แก้ไขชื่อร้าน' : 'เพิ่มร้านใหม่'}</Text>
@@ -129,7 +155,9 @@ onPress: async () => {
               value={inputText}
               onChangeText={setInputText}
               placeholder="พิมพ์ชื่อร้านที่นี่..."
+              placeholderTextColor="#9ca3af"
               autoFocus
+              {...Platform.select({ web: { outlineStyle: 'none' } })}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
@@ -149,50 +177,34 @@ onPress: async () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   customHeader: {
-    height: 60,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    height: 60, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: 16,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
   },
   backButton: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
   content: { flex: 1 },
   listPadding: { padding: 16, paddingBottom: 100 },
   listItem: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5
+    backgroundColor: '#fff', padding: 16, borderRadius: 12,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 10, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5
   },
   storeName: { fontSize: 16, color: '#374151', fontWeight: '500' },
   actions: { flexDirection: 'row' },
   iconBtn: { padding: 8, marginLeft: 12 },
   fab: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    backgroundColor: '#10b981',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
+    position: 'absolute', bottom: 30, right: 20,
+    backgroundColor: '#10b981', width: 56, height: 56, borderRadius: 28,
+    justifyContent: 'center', alignItems: 'center', elevation: 5,
   },
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
-  input: { backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20 },
+  input: { 
+    backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20,
+    color: '#1f2937'
+  },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
   btnCancel: { flex: 1, padding: 15, alignItems: 'center' },
   btnSave: { flex: 1, backgroundColor: '#10b981', padding: 15, borderRadius: 12, alignItems: 'center' },

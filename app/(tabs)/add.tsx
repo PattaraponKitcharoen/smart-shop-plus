@@ -472,9 +472,16 @@ const styles = StyleSheet.create({
     shadowRadius: 20, 
     elevation: 8 
   },
-  inputGroup: { marginBottom: 20 },
+  inputGroup: { 
+    marginBottom: 20,
+    // เอา flex ออกจากตรงนี้เพื่อให้ label ไม่เบี้ยว
+  },
   label: { fontSize: 11, fontWeight: '800', color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
-  row: { flexDirection: 'row', alignItems: 'flex-start' },
+  row: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start',
+    width: '100%', // มั่นใจว่าแถวเต็มความกว้าง
+  },
   inputWrapper: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -501,14 +508,30 @@ const styles = StyleSheet.create({
   qtyContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
+    justifyContent: 'space-between', // กระจาย ปุ่ม-เลข-ปุ่ม ให้เท่ากัน
     backgroundColor: '#F9FAFB', 
     borderRadius: 16, 
     height: 54,
     borderWidth: 1.5,
-    borderColor: '#F3F4F6'
+    borderColor: '#F3F4F6',
+    overflow: 'hidden', // กันเนื้อหาแลบออกนอกโค้ง
   },
-  qtyBtn: { width: 35, height: 54, justifyContent: 'center', alignItems: 'center' },
-  qtyInput: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '800', color: '#1f2937', ...Platform.select({ web: { outlineStyle: 'none' } }) },
+  qtyBtn: { 
+    width: 45, // เพิ่มความกว้างปุ่มให้กดง่ายขึ้น
+    height: 54, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6', // ใส่สีพื้นหลังปุ่มให้ออกแนวปุ่มกดชัดเจน
+  },
+  qtyInput: { 
+    flex: 1, // ให้ช่องกรอกตัวเลขขยายเต็มพื้นที่ตรงกลาง
+    textAlign: 'center', 
+    fontSize: 18, // ขยายตัวเลขให้ชัด
+    fontWeight: '800', 
+    color: '#1f2937', 
+    padding: 0, // ลบ padding เดิมที่อาจทำให้เลขไม่กลาง
+    ...Platform.select({ web: { outlineStyle: 'none' } }) 
+  },
   dropdown: { 
     backgroundColor: '#fff', 
     borderRadius: 16, 

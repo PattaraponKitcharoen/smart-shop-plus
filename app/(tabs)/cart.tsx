@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, 
     paddingTop: 0, 
     paddingBottom: 20,
-    marginTop: -30
+    marginTop: 10
   },
   dateText: { fontSize: 12, color: '#10b981', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: -4 },
   title: { fontSize: 34, fontWeight: '900', color: '#1f2937', letterSpacing: -1.2 },
