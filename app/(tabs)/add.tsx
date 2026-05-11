@@ -16,7 +16,7 @@ import {
   UIManager,
   View
 } from 'react-native';
-import { getDB } from '../../services/db';
+import { getDB, initDatabase } from '../../services/db';
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -58,9 +58,20 @@ export default function AddItemScreen() {
   const [showAisleList, setShowAisleList] = useState(false);
   const [activeField, setActiveField] = useState<'item' | 'store' | 'aisle' | 'price' | 'qty' | null>(null);
 
+  const [isDbReady, setIsDbReady] = useState(false); // 🚩 เพิ่มตัวแปรนี้
+
   useFocusEffect(
     useCallback(() => {
-      loadAllData();
+      const prepare = async () => {
+        try {
+          await initDatabase(); // 🚩 มั่นใจว่าเรียก init ก่อน
+          setIsDbReady(true);
+          await loadAllData();
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      prepare();
       return () => closeDropdowns();
     }, [])
   );
@@ -194,6 +205,7 @@ export default function AddItemScreen() {
   };
 
   const handleSave = async () => {
+    if (!isDbReady) return;
     const finalStoreName = (storeName || storeSearch).trim();
     const finalAisleName = (aisleName || aisleSearch).trim();
     const finalItemName = itemName.trim();
