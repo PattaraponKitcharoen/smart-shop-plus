@@ -197,7 +197,7 @@ export default function ShoppingScreen() {
                                   keyboardType="decimal-pad"
                                   editable={!isPending}
                                   defaultValue={item.currentPrice > 0 ? item.currentPrice.toString() : ''}
-                                  onBlur={(e) => handleSavePriceToDB(item.dbId, e.nativeEvent.text)}
+                                  onBlur={(e: any) => handleSavePriceToDB(item.dbId, e.nativeEvent.text)}
                                 />
                               </View>
                               {item.currentPrice > 0 && (
@@ -224,7 +224,17 @@ export default function ShoppingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
-  
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
   header: { 
     paddingHorizontal: 24, 
     paddingTop: 0
