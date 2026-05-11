@@ -42,22 +42,32 @@ export default function ManageAislesScreen() {
     }, []);
 
     const loadAisles = async () => {
-        try {
-            const database = getDB();
-            const result: any[] = await database.getAllAsync(
-                'SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name IS NOT NULL AND name != "" ORDER BY TRIM(name) ASC'
-            );
-            
-            const formattedAisles = result.map((item, index) => ({
-                id: index, 
-                name: item.name
-            }));
-            
-            setAisles(formattedAisles);
-        } catch (error) {
-            console.error("Load aisles error", error);
-        }
-    };
+    try {
+        const database = getDB();
+        
+        // 🚩 เปลี่ยน Query: ดึงชื่อโซนจาก items ที่มีการใช้งานอยู่จริง
+        // และ JOIN ไปที่ตาราง aisles เพื่อเอาชื่อมา
+        const result: any[] = await database.getAllAsync(`
+            SELECT DISTINCT TRIM(a.name) as name 
+            FROM items i
+            JOIN aisles a ON i.aisle_id = a.id
+            WHERE a.name IS NOT NULL AND a.name != ""
+            ORDER BY TRIM(a.name) ASC
+        `);
+        
+        // ถ้า Query ด้านบนยังไม่ขึ้น ให้ลองใช้ท่า Backup นี้ (ดึงจากตาราง aisles ตรงๆ แต่ล้างข้อมูลขยะ)
+        // const result: any[] = await database.getAllAsync('SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name != ""');
+
+        const formattedAisles = result.map((item, index) => ({
+            id: index, 
+            name: item.name
+        }));
+        
+        setAisles(formattedAisles);
+    } catch (error) {
+        console.error("Load aisles error", error);
+    }
+};
 
     const handleSave = async () => {
         if (!inputText.trim() || !isDbReady) return;
@@ -65,16 +75,14 @@ export default function ManageAislesScreen() {
             const database = getDB();
             
             if (editingAisle) {
-                // อัปเดตทุกแถวที่มีชื่อเดิม
+                // ✅ ขั้นตอนเดียวจบ: อัปเดตชื่อในตาราง aisles
+                // สินค้าใน items ที่เชื่อมกับ ID นี้อยู่ จะเปลี่ยนชื่อตามเองทันที
                 await database.runAsync(
                     'UPDATE aisles SET name = ? WHERE name = ?', 
                     [inputText.trim(), editingAisle.name]
                 );
-                // อัปเดตตาราง items ด้วย
-                await database.runAsync(
-                    'UPDATE items SET aisle_id = (SELECT id FROM aisles WHERE name = ? LIMIT 1) WHERE aisle_id IN (SELECT id FROM aisles WHERE name = ?)',
-                    [inputText.trim(), editingAisle.name]
-                );
+
+                console.log(`✅ Updated aisle name from ${editingAisle.name} to ${inputText.trim()}`);
             } else {
                 // เพิ่มโซนใหม่
                 await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [inputText.trim()]);
@@ -83,9 +91,11 @@ export default function ManageAislesScreen() {
             setInputText('');
             setEditingAisle(null);
             setModalVisible(false);
+            
+            // โหลดรายการใหม่มาโชว์
             await loadAisles();
         } catch (error) {
-            console.error(error);
+            console.error("Save Error:", error);
             if (Platform.OS === 'web') alert("ไม่สามารถบันทึกข้อมูลได้");
             else Alert.alert("Error", "ไม่สามารถบันทึกข้อมูลได้");
         }
