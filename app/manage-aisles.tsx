@@ -42,25 +42,36 @@ const loadAisles = async () => {
     try {
         const database = getDB();
         
-        // ใช้ Query แบบมาตรฐาน ไม่ต้องมี TRIM หรือ DISTINCT ที่ซับซ้อนในจังหวะนี้
-        // เพื่อเช็คก่อนว่าข้อมูลมาไหม
+        // 🚩 ใช้ Query ที่สั้นและปลอดภัยที่สุด เพื่อเลี่ยง Error code 1
+        // เราจะไม่ใช้ WHERE ใน SQL แต่จะมากรองใน JS แทน
         const result: any[] = await database.getAllAsync(
-            'SELECT id, name FROM aisles WHERE name IS NOT NULL ORDER BY name ASC'
+            'SELECT id, name FROM aisles'
         );
         
-        console.log("📊 Data from DB:", result);
+        console.log("📊 Raw Data from DB:", result);
 
-        // กรองค่าว่างออกด้วย JavaScript แทน SQL เพื่อความปลอดภัย
+        // 🚩 กรองข้อมูลด้วย JavaScript (เสถียรกว่าบน Web Browser)
         const formatted = result
-            .filter(item => item.name && item.name.trim() !== "")
+            .filter(item => 
+                item && 
+                item.name && 
+                typeof item.name === 'string' && 
+                item.name.trim() !== ""
+            )
             .map((item) => ({
                 id: item.id,
                 name: item.name.trim()
-            }));
+            }))
+            // เรียงลำดับ ก-ฮ ด้วย JS
+            .sort((a, b) => a.name.localeCompare(b.name, 'th'));
         
         setAisles(formatted);
+        console.log("✅ Formatted Data:", formatted);
+
     } catch (error) {
         console.error("❌ Load Error:", error);
+        // ถ้ายังพังอีก ให้เซตเป็นอาเรย์ว่างป้องกันแอปค้าง
+        setAisles([]);
     }
 };
 
