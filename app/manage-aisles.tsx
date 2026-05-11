@@ -45,20 +45,27 @@ export default function ManageAislesScreen() {
     try {
         const database = getDB();
         
-        // 🚩 เปลี่ยน Query: ดึงชื่อโซนจาก items ที่มีการใช้งานอยู่จริง
-        // และ JOIN ไปที่ตาราง aisles เพื่อเอาชื่อมา
+        // 🚩 ประยุกต์ใช้จากหน้า Manage Item: 
+        // เราจะไปหา 'ชื่อโซน' ทั้งหมดที่ถูกใช้อยู่ในตาราง items จริงๆ
         const result: any[] = await database.getAllAsync(`
-            SELECT DISTINCT TRIM(a.name) as name 
-            FROM items i
-            JOIN aisles a ON i.aisle_id = a.id
+            SELECT DISTINCT a.name 
+            FROM aisles a
+            INNER JOIN items i ON a.id = i.aisle_id
             WHERE a.name IS NOT NULL AND a.name != ""
-            ORDER BY TRIM(a.name) ASC
+            ORDER BY a.name ASC
         `);
-        
-        // ถ้า Query ด้านบนยังไม่ขึ้น ให้ลองใช้ท่า Backup นี้ (ดึงจากตาราง aisles ตรงๆ แต่ล้างข้อมูลขยะ)
-        // const result: any[] = await database.getAllAsync('SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name != ""');
 
-        const formattedAisles = result.map((item, index) => ({
+        // 💡 ถ้า Query ด้านบนยังว่าง (เพราะอาจจะยังไม่มีสินค้าในโซนนั้น) 
+        // ให้ใช้ท่าสำรองดึงจากตารางตรงๆ แบบนี้ครับ
+        let finalResult = result;
+        if (result.length === 0) {
+            finalResult = await database.getAllAsync(`
+                SELECT DISTINCT name FROM aisles 
+                WHERE name IS NOT NULL AND name != ""
+            `);
+        }
+        
+        const formattedAisles = finalResult.map((item, index) => ({
             id: index, 
             name: item.name
         }));
