@@ -62,17 +62,25 @@ export default function AddItemScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      let isMounted = true;
+
       const prepare = async () => {
         try {
-          await initDatabase(); // 🚩 มั่นใจว่าเรียก init ก่อน
-          setIsDbReady(true);
-          await loadAllData();
+          await initDatabase(); // ปลอดภัยแล้วเพราะเราแก้ใน db.ts แล้ว
+          if (isMounted) {
+            setIsDbReady(true);
+            await loadAllData();
+          }
         } catch (e) {
           console.error(e);
         }
       };
+
       prepare();
-      return () => closeDropdowns();
+      return () => {
+        isMounted = false;
+        closeDropdowns();
+      };
     }, [])
   );
 
