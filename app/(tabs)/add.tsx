@@ -374,9 +374,12 @@ export default function AddItemScreen() {
           )}
         </View>
 
+        // 🚩 แก้ไขส่วน renderFormContent (เฉพาะส่วนข้อ 4 ราคา & จำนวน)
+        
         {/* 4. ราคา & จำนวน */}
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 1.5, marginRight: 8 }]}>
+        <View style={[styles.row, { marginBottom: 20 }]}>
+          {/* ช่องราคา */}
+          <View style={{ flex: 1.5, marginRight: 12 }}>
             <Text style={styles.label}>ราคา/หน่วย</Text>
             <View style={[styles.inputWrapper, activeField === 'price' && styles.inputWrapperActive]}>
               <Text style={styles.currency}>฿</Text>
@@ -392,21 +395,33 @@ export default function AddItemScreen() {
             </View>
           </View>
 
-          <View style={[styles.inputGroup, { flex: 1 }]}>
+          {/* ช่องจำนวน - ปรับปรุงโครงสร้างใหม่ */}
+          <View style={{ flex: 1 }}>
             <Text style={styles.label}>จำนวน</Text>
             <View style={styles.qtyContainer}>
-              <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(-1)}>
-                <FontAwesome5 name="minus" size={10} color="#10b981" />
+              <TouchableOpacity 
+                style={styles.qtyBtn} 
+                onPress={() => adjustQty(-1)}
+                activeOpacity={0.7}
+              >
+                <FontAwesome5 name="minus" size={12} color="#10b981" />
               </TouchableOpacity>
+              
               <TextInput 
                 style={styles.qtyInput} 
                 keyboardType="number-pad" 
                 value={quantity} 
                 onChangeText={setQuantity}
                 onFocus={() => { setActiveField('qty'); scrollToBottom(); }}
+                selectTextOnFocus
               />
-              <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(1)}>
-                <FontAwesome5 name="plus" size={10} color="#10b981" />
+              
+              <TouchableOpacity 
+                style={styles.qtyBtn} 
+                onPress={() => adjustQty(1)}
+                activeOpacity={0.7}
+              >
+                <FontAwesome5 name="plus" size={12} color="#10b981" />
               </TouchableOpacity>
             </View>
           </View>
@@ -479,8 +494,8 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '800', color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
   row: { 
     flexDirection: 'row', 
-    alignItems: 'flex-start',
-    width: '100%', // มั่นใจว่าแถวเต็มความกว้าง
+    alignItems: 'flex-end', // ปรับให้ชิดล่างเพื่อให้ Label ตรงกัน
+    width: '100%',
   },
   inputWrapper: { 
     flexDirection: 'row', 
@@ -508,29 +523,34 @@ const styles = StyleSheet.create({
   qtyContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    justifyContent: 'space-between', // กระจาย ปุ่ม-เลข-ปุ่ม ให้เท่ากัน
     backgroundColor: '#F9FAFB', 
     borderRadius: 16, 
-    height: 54,
+    height: 54, // ความสูงเท่ากับช่องราคา
     borderWidth: 1.5,
     borderColor: '#F3F4F6',
-    overflow: 'hidden', // กันเนื้อหาแลบออกนอกโค้ง
+    overflow: 'hidden', // กันเนื้อหาหลุดขอบ
   },
+
   qtyBtn: { 
-    width: 45, // เพิ่มความกว้างปุ่มให้กดง่ายขึ้น
-    height: 54, 
+    width: 40, 
+    height: '100%', 
     justifyContent: 'center', 
     alignItems: 'center',
-    backgroundColor: '#F3F4F6', // ใส่สีพื้นหลังปุ่มให้ออกแนวปุ่มกดชัดเจน
+    backgroundColor: '#F3F4F6', // แยกสีปุ่มให้เห็นชัด
   },
+
   qtyInput: { 
-    flex: 1, // ให้ช่องกรอกตัวเลขขยายเต็มพื้นที่ตรงกลาง
+    flex: 1, 
     textAlign: 'center', 
-    fontSize: 18, // ขยายตัวเลขให้ชัด
+    fontSize: 18, 
     fontWeight: '800', 
-    color: '#1f2937', 
-    padding: 0, // ลบ padding เดิมที่อาจทำให้เลขไม่กลาง
-    ...Platform.select({ web: { outlineStyle: 'none' } }) 
+    color: '#1f2937',
+    paddingVertical: 0, // ลบ Padding ที่ทำให้ Cursor เบี้ยว
+    margin: 0,
+    minWidth: 40,
+    ...Platform.select({ 
+        web: { outlineStyle: 'none' } 
+    }) 
   },
   dropdown: { 
     backgroundColor: '#fff', 
