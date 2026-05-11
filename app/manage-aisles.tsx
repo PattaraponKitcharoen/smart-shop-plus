@@ -39,33 +39,29 @@ export default function ManageAislesScreen() {
 
   const loadAisles = async () => {
     try {
-      const database = getDB();
-      
-      // 🚩 ใช้ Query เดียวกับหน้า Manage Item ที่ JOIN ตาราง items กับ aisles
-      // วิธีนี้จะดึง "โซนที่มีสินค้าผูกอยู่" ออกมาโชว์แน่นอน
-      const result: any[] = await database.getAllAsync(`
-        SELECT DISTINCT a.id, a.name 
-        FROM aisles a
-        INNER JOIN items i ON a.id = i.aisle_id
-        WHERE a.name IS NOT NULL AND a.name != ""
-        ORDER BY a.name ASC
-      `);
+        const database = getDB();
+        
+        // 🚩 เลิก JOIN items ครับ! เราจะดึงจากตาราง aisles ตรงๆ 
+        // เพื่อให้ "โซนที่เพิ่งเพิ่ม" หรือ "โซนที่ว่างเปล่า" ปรากฏตัวออกมา
+        const result: any[] = await database.getAllAsync(`
+            SELECT id, name 
+            FROM aisles 
+            WHERE name IS NOT NULL AND TRIM(name) != ""
+            ORDER BY name ASC
+        `);
 
-      // 💡 ถ้า Query แรกไม่เจอ (กรณีแอดโซนทิ้งไว้แต่ยังไม่มีสินค้า) ให้ดึงจากตาราง aisles ตรงๆ
-      let dataToSet = result;
-      if (result.length === 0) {
-        const fallback: any[] = await database.getAllAsync(
-          'SELECT id, name FROM aisles WHERE name IS NOT NULL AND name != "" ORDER BY name ASC'
-        );
-        dataToSet = fallback;
-      }
-      
-      setAisles(dataToSet);
-      console.log("Aisles Loaded:", dataToSet);
+        console.log("📊 Data check - Aisles in DB:", result); // เช็คใน Console ดูครับว่ามาไหม
+
+        const formatted = result.map((item) => ({
+            id: item.id, 
+            name: item.name
+        }));
+        
+        setAisles(formatted);
     } catch (error) {
-      console.error("Load Error:", error);
+        console.error("❌ Load Error:", error);
     }
-  };
+};
 
   const handleSave = async () => {
     if (!inputText.trim()) return;
