@@ -82,7 +82,7 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
       setTimeout(async () => {
         await get().fetchCart(); 
         console.log("Auto-refreshed Cart Data!");
-      }, 3000);
+      }, 2010);
 
     } catch (error) {
       console.error("Toggle Item Error:", error);

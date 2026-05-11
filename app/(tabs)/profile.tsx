@@ -7,10 +7,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput, // เพิ่ม TextInput
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ✅ ใช้ legacy สำหรับ SDK 54
 import * as DocumentPicker from 'expo-document-picker';
@@ -127,148 +128,201 @@ export default function ProfileScreen() {
   };
 
   const handleClearAllData = async () => {
-    try {
-      await db.runAsync('DELETE FROM items');
-      await db.runAsync('DELETE FROM aisles');
-      await db.runAsync('DELETE FROM stores');
-      await fetchData();
-      Alert.alert("สำเร็จ", "ล้างข้อมูลเรียบร้อยแล้ว");
-    } catch (error) {
-      Alert.alert("ผิดพลาด", "ไม่สามารถล้างข้อมูลได้");
-    }
+    Alert.alert('ลบข้อมูลทั้งหมด', 'คุณแน่ใจหรือไม่ว่าต้องการล้างฐานข้อมูลแอปทั้งหมด? ข้อมูลนี้ไม่สามารถกู้คืนได้', [
+        { text: 'ยกเลิก', style: 'cancel' },
+        { 
+            text: 'ลบข้อมูล', 
+            style: 'destructive',
+            onPress: async () => {
+                try {
+                    await db.runAsync('DELETE FROM items');
+                    await db.runAsync('DELETE FROM aisles');
+                    await db.runAsync('DELETE FROM stores');
+                    await fetchData();
+                    Alert.alert("สำเร็จ", "ล้างข้อมูลเรียบร้อยแล้ว");
+                  } catch (error) {
+                    Alert.alert("ผิดพลาด", "ไม่สามารถล้างข้อมูลได้");
+                  }
+            }
+        }
+    ]);
   };
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header ส่วนโปรไฟล์ */}
-      <View style={styles.header}>
-        <View style={styles.profileInfo}>
-          <TouchableOpacity 
-            style={styles.avatarWrapper}
-            onPress={() => Alert.alert("Coming Soon", "ระบบเปลี่ยนรูปโปรไฟล์จะตามมาเร็วๆ นี้")}
-          >
-            <Image 
-              source={{ uri: `https://ui-avatars.com/api/?name=${name}&background=10b981&color=fff` }} 
-              style={styles.avatar} 
-            />
-            <View style={styles.cameraBadge}>
-              <FontAwesome5 name="camera" size={8} color="#fff" />
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header ส่วนโปรไฟล์ */}
+        <View style={styles.header}>
+            <View style={styles.headerTextGroup}>
+                <Text style={styles.dateText}></Text>
+                <Text style={styles.title}>โปรไฟล์</Text>
             </View>
-          </TouchableOpacity>
 
-          <View style={styles.textInfo}>
-            {isEditing ? (
-              <View style={styles.editNameContainer}>
-                <TextInput
-                  style={styles.nameInput}
-                  value={tempName}
-                  onChangeText={setTempName}
-                  autoFocus
-                  placeholder="ใส่ชื่อของคุณ"
-                />
-                <TouchableOpacity style={styles.saveIconBtn} onPress={handleSaveName}>
-                  <FontAwesome5 name="check" size={16} color="#10b981" />
-                </TouchableOpacity>
+          <View style={styles.profileInfoCard}>
+            <TouchableOpacity 
+              style={styles.avatarWrapper}
+              onPress={() => Alert.alert("Coming Soon", "ระบบเปลี่ยนรูปโปรไฟล์จะตามมาเร็วๆ นี้")}
+            >
+              <Image 
+                source={{ uri: `https://ui-avatars.com/api/?name=${name}&background=10b981&color=fff&size=128` }} 
+                style={styles.avatar} 
+              />
+              <View style={styles.cameraBadge}>
+                <FontAwesome5 name="camera" size={8} color="#fff" />
               </View>
-            ) : (
-              <TouchableOpacity 
-                style={styles.nameRow} 
-                onPress={() => {
-                  setTempName(name);
-                  setIsEditing(true);
-                }}
-              >
-                <Text style={styles.userName}>{name}</Text>
-                <FontAwesome5 name="pen" size={12} color="#9ca3af" style={{ marginLeft: 8 }} />
-              </TouchableOpacity>
-            )}
-            <View style={styles.statusRow}>
-               <View style={styles.onlineDot} />
-               <Text style={styles.offlineStatus}>ข้อมูลเก็บในเครื่องเท่านั้น</Text>
+            </TouchableOpacity>
+
+            <View style={styles.textInfo}>
+              {isEditing ? (
+                <View style={styles.editNameContainer}>
+                  <TextInput
+                    style={styles.nameInput}
+                    value={tempName}
+                    onChangeText={setTempName}
+                    autoFocus
+                    placeholder="ใส่ชื่อของคุณ"
+                    onSubmitEditing={handleSaveName}
+                  />
+                  <TouchableOpacity style={styles.saveIconBtn} onPress={handleSaveName}>
+                    <FontAwesome5 name="check-circle" size={20} color="#10b981" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.nameRow} 
+                  onPress={() => {
+                    setTempName(name);
+                    setIsEditing(true);
+                  }}
+                >
+                  <Text style={styles.userName}>{name}</Text>
+                  <View style={styles.penIconBox}>
+                    <FontAwesome5 name="pen" size={10} color="#9ca3af" />
+                  </View>
+                </TouchableOpacity>
+              )}
+              <View style={styles.statusRow}>
+                 <View style={styles.onlineDot} />
+                 <Text style={styles.offlineStatus}>ข้อมูลเก็บในเครื่องเท่านั้น</Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      <Text style={styles.sectionTitle}>การตั้งค่าการช้อปปิ้ง</Text>
-      <View style={styles.menuContainer}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/manage-stores')}>
-          <View style={[styles.iconBox, { backgroundColor: '#e0f2fe' }]}>
-            <FontAwesome5 name="store" size={18} color="#0284c7" />
-          </View>
-          <Text style={styles.menuTitle}>แก้ไขรายชื่อร้านค้า</Text>
-          <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
-        </TouchableOpacity>
+        {/* เมนูการตั้งค่า */}
+        <View style={styles.contentArea}>
+            <Text style={styles.sectionTitle}>การตั้งค่าการช้อปปิ้ง</Text>
+            <View style={styles.menuCard}>
+                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/manage-stores')}>
+                <View style={[styles.iconBox, { backgroundColor: '#e0f2fe' }]}>
+                    <FontAwesome5 name="store" size={16} color="#0284c7" />
+                </View>
+                <Text style={styles.menuTitle}>แก้ไขรายชื่อร้านค้า</Text>
+                <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
+                </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/manage-aisles')}>
-          <View style={[styles.iconBox, { backgroundColor: '#f0fdf4' }]}>
-            <FontAwesome5 name="layer-group" size={18} color="#10b981" />
-          </View>
-          <Text style={styles.menuTitle}>จัดการหมวดหมู่/โซน</Text>
-          <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
-        </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/manage-aisles')}>
+                <View style={[styles.iconBox, { backgroundColor: '#f0fdf4' }]}>
+                    <FontAwesome5 name="layer-group" size={16} color="#10b981" />
+                </View>
+                <Text style={styles.menuTitle}>จัดการหมวดหมู่/โซน</Text>
+                <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
+                </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/manage-items')}>
-          <View style={[styles.iconBox, { backgroundColor: '#fff1f2' }]}>
-            <FontAwesome5 name="box-open" size={18} color="#e11d48" />
-          </View>
-          <Text style={styles.menuTitle}>จัดการฐานข้อมูลสินค้า</Text>
-          <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
-        </TouchableOpacity>
-      </View>
+                <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => router.push('/manage-items')}>
+                <View style={[styles.iconBox, { backgroundColor: '#fff1f2' }]}>
+                    <FontAwesome5 name="box-open" size={16} color="#e11d48" />
+                </View>
+                <Text style={styles.menuTitle}>จัดการฐานข้อมูลสินค้า</Text>
+                <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
+                </TouchableOpacity>
+            </View>
 
-      <Text style={styles.sectionTitle}>สำรองและกู้คืนข้อมูล</Text>
-      <View style={styles.menuContainer}>
-        <TouchableOpacity style={styles.menuItem} onPress={handleExportCSV}>
-          <View style={[styles.iconBox, { backgroundColor: '#fff7ed' }]}>
-            <FontAwesome5 name="file-export" size={18} color="#ea580c" />
-          </View>
-          <Text style={styles.menuTitle}>ส่งออกข้อมูล (CSV)</Text>
-          <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
-        </TouchableOpacity>
+            <Text style={styles.sectionTitle}>สำรองและกู้คืนข้อมูล</Text>
+            <View style={styles.menuCard}>
+                <TouchableOpacity style={styles.menuItem} onPress={handleExportCSV}>
+                <View style={[styles.iconBox, { backgroundColor: '#fff7ed' }]}>
+                    <FontAwesome5 name="file-export" size={16} color="#ea580c" />
+                </View>
+                <Text style={styles.menuTitle}>ส่งออกข้อมูล (CSV)</Text>
+                <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
+                </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={handleImportCSV}>
-          <View style={[styles.iconBox, { backgroundColor: '#ecfdf5' }]}>
-            <FontAwesome5 name="file-import" size={18} color="#059669" />
-          </View>
-          <Text style={styles.menuTitle}>นำเข้าข้อมูล (CSV)</Text>
-          <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
-        </TouchableOpacity>
-      </View>
+                <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleImportCSV}>
+                <View style={[styles.iconBox, { backgroundColor: '#ecfdf5' }]}>
+                    <FontAwesome5 name="file-import" size={16} color="#059669" />
+                </View>
+                <Text style={styles.menuTitle}>นำเข้าข้อมูล (CSV)</Text>
+                <FontAwesome5 name="chevron-right" size={12} color="#d1d5db" />
+                </TouchableOpacity>
+            </View>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.clearDataButton} onPress={handleClearAllData}>
-          <Text style={styles.clearDataText}>ลบข้อมูลแอปทั้งหมด</Text>
-        </TouchableOpacity>
-        <Text style={styles.versionText}>Smart Shop Plus v1.0.0</Text>
-      </View>
-    </ScrollView>
+            <View style={styles.footerArea}>
+                <TouchableOpacity style={styles.clearDataButton} onPress={handleClearAllData}>
+                <FontAwesome5 name="trash-alt" size={14} color="#ef4444" style={{marginRight: 8}} />
+                <Text style={styles.clearDataText}>ลบข้อมูลแอปทั้งหมด</Text>
+                </TouchableOpacity>
+                <Text style={styles.versionText}>Smart Shop Plus v1.1.0 • Stable</Text>
+            </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { backgroundColor: '#fff', padding: 24, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  profileInfo: { flexDirection: 'row', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#F3F4F6' },
+  header: { paddingHorizontal: 24, paddingTop: 20, marginBottom: 0 },
+  headerTextGroup: { marginBottom: 15, marginTop: -5 },
+  dateText: { fontSize: 12, color: '#10b981', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: -4 },
+  title: { fontSize: 34, fontWeight: '900', color: '#1f2937', letterSpacing: -1.2 },
+
+  profileInfoCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#fff', 
+    padding: 15, 
+    borderRadius: 24,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 4
+  },
   avatarWrapper: { position: 'relative' },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E5E7EB' },
-  cameraBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#10b981', width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  textInfo: { marginLeft: 20, flex: 1 },
+  avatar: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#E5E7EB' },
+  cameraBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#10b981', width: 22, height: 22, borderRadius: 11, borderWidth: 3, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  
+  textInfo: { marginLeft: 16, flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  userName: { fontSize: 22, fontWeight: 'bold', color: '#1f2937' },
-  editNameContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 10 },
-  nameInput: { fontSize: 18, fontWeight: 'bold', color: '#1f2937', paddingVertical: 4, flex: 1 },
-  saveIconBtn: { padding: 10 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  userName: { fontSize: 22, fontWeight: '800', color: '#1f2937' },
+  penIconBox: { backgroundColor: '#F3F4F6', padding: 5, borderRadius: 6, marginLeft: 8 },
+  
+  editNameContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 12, paddingLeft: 12 },
+  nameInput: { fontSize: 18, fontWeight: '800', color: '#1f2937', paddingVertical: 8, flex: 1 },
+  saveIconBtn: { padding: 12 },
+
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981', marginRight: 6 },
-  offlineStatus: { fontSize: 12, color: '#6b7280' },
-  sectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#9ca3af', marginLeft: 24, marginTop: 24, marginBottom: 8, textTransform: 'uppercase' },
-  menuContainer: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },
-  iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  menuTitle: { flex: 1, fontSize: 16, color: '#374151', fontWeight: '500' },
-  footer: { marginTop: 40, paddingHorizontal: 20, paddingBottom: 40, alignItems: 'center' },
-  clearDataButton: { paddingVertical: 12 },
-  clearDataText: { color: '#ef4444', fontWeight: '600', fontSize: 15 },
-  versionText: { color: '#9ca3af', fontSize: 11, marginTop: 8 },
+  offlineStatus: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+
+  contentArea: { paddingHorizontal: 20 },
+  sectionTitle: { fontSize: 12, fontWeight: '800', color: '#9ca3af', marginLeft: 10, marginTop: 10, marginBottom: 5, textTransform: 'uppercase', letterSpacing: 1 },
+  
+  menuCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: 24, 
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 2 
+  },
+  menuItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 15, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#F9FAFB' 
+  },
+  iconBox: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  menuTitle: { flex: 1, fontSize: 16, color: '#374151', fontWeight: '600' },
+
+  footerArea: { marginTop: 20, paddingBottom: 40, alignItems: 'center' },
+  clearDataButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 1 },
+  clearDataText: { color: '#ef4444', fontWeight: '700', fontSize: 15 },
+  versionText: { color: '#9ca3af', fontSize: 11, marginTop: 8, fontWeight: '500' },
 });

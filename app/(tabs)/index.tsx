@@ -42,16 +42,14 @@ export default function ShoppingScreen() {
     setOpenStates(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ✅ ฟังก์ชันใหม่: ปรับจำนวนสินค้าในฐานข้อมูล
   const updateQuantity = async (dbId: number, delta: number) => {
     try {
-      // ดึงข้อมูลปัจจุบันมาเช็ค
       const item: any = await db.getFirstAsync('SELECT quantity FROM items WHERE id = ?', [dbId]);
       if (item) {
         const newQty = item.quantity + delta;
         if (newQty >= 1) {
           await db.runAsync('UPDATE items SET quantity = ? WHERE id = ?', [newQty, dbId]);
-          await fetchData(); // รีเฟรชข้อมูลหน้าจอ
+          await fetchData();
         }
       }
     } catch (error) {
@@ -70,7 +68,6 @@ export default function ShoppingScreen() {
   };
 
   const handleCheckItem = (dbId: number) => {
-    // 1. ถ้ามีการกดซ้ำในขณะที่กำลังนับถอยหลัง (Cancel)
     if (pendingChecks[dbId]) {
       clearTimeout(pendingChecks[dbId]);
       setPendingChecks(prev => {
@@ -81,16 +78,9 @@ export default function ShoppingScreen() {
       return;
     }
 
-    // 2. เริ่มนับถอยหลัง 2 วินาทีเพื่อติ๊กถูก (Visual Effect ในหน้าหลัก)
     const timer = setTimeout(async () => {
-      // ✅ สั่ง LayoutAnimation เพื่อความนุ่มนวล
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      
-      // ✅ เรียกใช้ toggleItem จาก Store 
-      // (ซึ่งข้างใน Store เราเขียนไว้แล้วว่าให้ fetchData ทันที และรอ 3 วิเพื่อ fetchCart)
       await toggleItem(dbId, true); 
-
-      // ลบสถานะ Pending ออกหลังจากทำงานเสร็จ
       setPendingChecks(prev => {
         const newState = { ...prev };
         delete newState[dbId];
@@ -104,25 +94,33 @@ export default function ShoppingScreen() {
   if (!isReady) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.emptyContainer}><Text>กำลังเตรียมข้อมูล...</Text></View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>กำลังเตรียมรายการ...</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}> 
       <View style={styles.header}>
-        <View>
-          <Text style={styles.dateText}>รายการช้อปปิ้ง</Text>
-          <Text style={styles.greetingText}>วันนี้ซื้ออะไรดี?</Text>
+        <View style={styles.headerLeft}>
+          {/* วันที่: บีบให้ชิดหัวข้อด้านล่าง */}
+          <Text style={styles.dateText}>
+            {new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </Text>
+          {/* หัวข้อ: ปรับให้ตัวใหญ่ หนา และขยับขึ้นไปชิดด้านบน */}
+          <Text style={styles.greetingText}>รายการช้อปปิ้ง</Text>
         </View>
       </View>
 
-      <ScrollView style={styles.listArea}>
+      <ScrollView style={styles.listArea} showsVerticalScrollIndicator={false}>
         {stores.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <FontAwesome5 name="clipboard-list" size={50} color="#e5e7eb" />
-            <Text style={styles.emptyText}>ไม่มีรายการที่ต้องซื้อ{"\n"}เพิ่มของได้ที่หน้า "เพิ่มของ" นะครับ</Text>
+            <View style={styles.emptyIconBox}>
+               <FontAwesome5 name="clipboard-check" size={50} color="#d1d5db" />
+            </View>
+            <Text style={styles.emptyText}>ช้อปครบเรียบร้อยแล้ว!{"\n"}หรือยังไม่มีรายการที่เพิ่มไว้</Text>
           </View>
         ) : (
           stores.map((store: any) => {
@@ -131,9 +129,12 @@ export default function ShoppingScreen() {
 
             return (
               <View key={storeKey} style={styles.storeCard}>
-                <TouchableOpacity style={styles.storeHeader} onPress={() => toggleDropdown(storeKey)}>
-                  <Text style={styles.storeName}>{store.name}</Text>
-                  <FontAwesome5 name={isStoreOpen ? "chevron-up" : "chevron-down"} size={14} color="#065f46" />
+                <TouchableOpacity style={styles.storeHeader} onPress={() => toggleDropdown(storeKey)} activeOpacity={0.7}>
+                  <View style={styles.storeTitleRow}>
+                    <FontAwesome5 name="store" size={14} color="#059669" style={{ marginRight: 10 }} />
+                    <Text style={styles.storeName}>{store.name}</Text>
+                  </View>
+                  <FontAwesome5 name={isStoreOpen ? "chevron-up" : "chevron-down"} size={14} color="#059669" />
                 </TouchableOpacity>
                 
                 {isStoreOpen && store.aisles.map((aisle: any) => {
@@ -142,8 +143,9 @@ export default function ShoppingScreen() {
 
                   return (
                     <View key={aisleKey} style={styles.aisleSection}>
-                      <TouchableOpacity style={styles.aisleHeader} onPress={() => toggleDropdown(aisleKey)}>
+                      <TouchableOpacity style={styles.aisleHeader} onPress={() => toggleDropdown(aisleKey)} activeOpacity={0.6}>
                         <Text style={styles.aisleName}>{aisle.name}</Text>
+                        <View style={styles.aisleLine} />
                         <FontAwesome5 name={isAisleOpen ? "caret-up" : "caret-down"} size={12} color="#9ca3af" />
                       </TouchableOpacity>
 
@@ -152,6 +154,7 @@ export default function ShoppingScreen() {
                         
                         return (
                           <View key={`item-${item.dbId}`} style={[styles.itemRow, isPending && styles.itemRowPending]}>
+                            {/* Checkbox ที่ดูนุ่มนวลขึ้น */}
                             <TouchableOpacity 
                               style={[styles.checkCircle, isPending && styles.checkCircleChecked]} 
                               onPress={() => handleCheckItem(item.dbId)}
@@ -160,49 +163,46 @@ export default function ShoppingScreen() {
                             </TouchableOpacity>
                             
                             <View style={styles.itemInfo}>
-                              <View style={styles.nameRow}>
-                                <Text style={[styles.itemName, isPending && styles.textStrikethrough]}>
-                                  {item.name}
-                                </Text>
-                              </View>
-                              <Text style={[styles.itemPrice, isPending && styles.textGray]}>
-                                ล่าสุด: ฿{item.price.toFixed(0)}
+                              <Text style={[styles.itemName, isPending && styles.textStrikethrough]}>
+                                {item.name}
                               </Text>
+                              <Text style={styles.lastPriceText}>ล่าสุด: ฿{item.price.toFixed(0)}</Text>
 
-                              {/* ✅ UI ส่วนปรับจำนวน */}
+                              {/* Qty Controller ที่ดูเป็นสัดส่วน */}
                               <View style={styles.qtyController}>
                                 <TouchableOpacity 
                                   onPress={() => updateQuantity(item.dbId, -1)}
                                   disabled={isPending || item.quantity <= 1}
                                   style={[styles.qtyBtn, item.quantity <= 1 && { opacity: 0.3 }]}
                                 >
-                                  <FontAwesome5 name="minus" size={10} color="#6b7280" />
+                                  <FontAwesome5 name="minus" size={8} color="#059669" />
                                 </TouchableOpacity>
-                                
                                 <Text style={styles.qtyValueText}>{item.quantity}</Text>
-
                                 <TouchableOpacity 
                                   onPress={() => updateQuantity(item.dbId, 1)}
                                   disabled={isPending}
                                   style={styles.qtyBtn}
                                 >
-                                  <FontAwesome5 name="plus" size={10} color="#6b7280" />
+                                  <FontAwesome5 name="plus" size={8} color="#059669" />
                                 </TouchableOpacity>
                               </View>
                             </View>
                             
                             <View style={styles.priceActionArea}>
-                              <TextInput 
-                                style={[styles.priceInput, isPending && { opacity: 0.4 }]} 
-                                placeholder="฿/หน่วย"
-                                keyboardType="decimal-pad"
-                                editable={!isPending}
-                                defaultValue={item.currentPrice > 0 ? item.currentPrice.toString() : ''}
-                                onBlur={(e) => handleSavePriceToDB(item.dbId, e.nativeEvent.text)}
-                              />
+                              <View style={styles.priceInputWrapper}>
+                                <Text style={styles.currencyPrefix}>฿</Text>
+                                <TextInput 
+                                  style={[styles.priceInput, isPending && { opacity: 0.4 }]} 
+                                  placeholder="0.00"
+                                  keyboardType="decimal-pad"
+                                  editable={!isPending}
+                                  defaultValue={item.currentPrice > 0 ? item.currentPrice.toString() : ''}
+                                  onBlur={(e) => handleSavePriceToDB(item.dbId, e.nativeEvent.text)}
+                                />
+                              </View>
                               {item.currentPrice > 0 && (
                                 <Text style={styles.totalHintText}>
-                                  รวม: ฿{(item.currentPrice * item.quantity).toFixed(0)}
+                                  รวม ฿{(item.currentPrice * item.quantity).toLocaleString()}
                                 </Text>
                               )}
                             </View>
@@ -216,42 +216,147 @@ export default function ShoppingScreen() {
             );
           })
         )}
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { padding: 20 },
-  dateText: { fontSize: 13, color: '#6b7280' },
-  greetingText: { fontSize: 24, fontWeight: 'bold', color: '#1f2937' },
-  listArea: { paddingHorizontal: 20 },
-  emptyContainer: { alignItems: 'center', marginTop: 100 },
-  emptyText: { textAlign: 'center', color: '#9ca3af', marginTop: 15, lineHeight: 22 },
-  storeCard: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 15, overflow: 'hidden', borderWidth: 1, borderColor: '#f3f4f6', elevation: 2 },
-  storeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: '#ecfdf5' },
-  storeName: { fontWeight: 'bold', fontSize: 16, color: '#065f46' },
-  aisleSection: { borderTopWidth: 1, borderTopColor: '#f3f4f6' },
-  aisleHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 10, backgroundColor: '#fafafa' },
-  aisleName: { fontSize: 11, fontWeight: '700', color: '#9ca3af', textTransform: 'uppercase' },
-  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
-  itemRowPending: { backgroundColor: '#f9fafb' },
-  checkCircle: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#10b981', marginRight: 12, alignItems: 'center', justifyContent: 'center' },
-  checkCircleChecked: { backgroundColor: '#10b981' },
-  itemInfo: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
-  itemName: { fontSize: 15, color: '#374151', fontWeight: '600' },
-  textStrikethrough: { textDecorationLine: 'line-through', color: '#9ca3af' },
-  textGray: { color: '#d1d5db' },
-  itemPrice: { fontSize: 11, color: '#9ca3af' },
+  container: { flex: 1, backgroundColor: '#F3F4F6' },
   
-  // ✅ สไตล์ส่วนปรับจำนวน
-  qtyController: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  qtyBtn: { width: 24, height: 24, backgroundColor: '#f3f4f6', borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e5e7eb' },
-  qtyValueText: { marginHorizontal: 12, fontSize: 14, fontWeight: 'bold', color: '#1f2937', minWidth: 15, textAlign: 'center' },
+  header: { 
+    paddingHorizontal: 24, 
+    paddingTop: 0
+,        // 🚩 ปรับเป็น 0 เพื่อให้ชิดขอบ Safe Area ที่สุด
+    paddingBottom: 30,    // ระยะห่างก่อนถึงรายการแรก
+    marginTop: -30,        // 🚩 ติดลบนิดๆ เพื่อดึงข้อมูลขึ้นไปอีก
+  },
+  headerLeft: { 
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  dateText: { 
+    fontSize: 12, 
+    color: '#10b981', 
+    fontWeight: 'bold', 
+    textTransform: 'uppercase', 
+    marginBottom: -20,     // 🚩 ใช้ค่าติดลบเพื่อให้ "รายการช้อปปิ้ง" ขยับขึ้นมาเกือบเกยกัน
+    includeFontPadding: false, // สำหรับ Android ไม่ให้มีช่องว่างขอบตัวอักษร
+  },
+  greetingText: { 
+    fontSize: 34,         // ขยายให้ใหญ่สะใจสไตล์ Apple Music
+    fontWeight: '900', 
+    color: '#1f2937',
+    letterSpacing: -1.2,  // บีบระยะห่างระหว่างตัวอักษรให้ดู Modern
+    lineHeight: 40,       // คุมระยะความสูงบรรทัด
+    includeFontPadding: false,
+  },
 
+  // List Area
+  listArea: { 
+    paddingHorizontal: 20 
+  },
+  
+  // Empty State
+  emptyContainer: { alignItems: 'center', marginTop: 80 },
+  emptyIconBox: { width: 100, height: 100, backgroundColor: '#fff', borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 20, elevation: 2 },
+  emptyText: { textAlign: 'center', color: '#9ca3af', fontSize: 16, lineHeight: 24 },
+
+  // Card Design
+  storeCard: { 
+    backgroundColor: '#fff', 
+    borderRadius: 24, 
+    marginBottom: 20, 
+    overflow: 'hidden',
+    shadowColor: '#000', 
+    shadowOpacity: 0.06, 
+    shadowRadius: 15, 
+    elevation: 4 
+  },
+  storeHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: 15, 
+    backgroundColor: '#ecfdf5' 
+  },
+  storeTitleRow: { flexDirection: 'row', alignItems: 'center' },
+  storeName: { fontWeight: '800', fontSize: 17, color: '#065f46' },
+
+  aisleSection: { borderTopWidth: 1, borderTopColor: '#f9fafb' },
+  aisleHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingVertical: 10, 
+    paddingBottom: 5,
+    backgroundColor: '#fff' 
+  },
+  aisleName: { fontSize: 11, fontWeight: '800', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 },
+  aisleLine: { flex: 1, height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 10 },
+
+  itemRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingVertical: 5, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#f9fafb' 
+  },
+  itemRowPending: { backgroundColor: '#f0fdf4' },
+  
+  checkCircle: { 
+    width: 28, 
+    height: 28, 
+    borderRadius: 14, 
+    borderWidth: 2, 
+    borderColor: '#10b981', 
+    marginRight: 15, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    backgroundColor: '#fff'
+  },
+  checkCircleChecked: { backgroundColor: '#10b981', borderColor: '#10b981' },
+  
+  itemInfo: { flex: 1 },
+  itemName: { fontSize: 16, color: '#1f2937', fontWeight: '700', marginBottom: 2 },
+  lastPriceText: { fontSize: 11, color: '#9ca3af', marginBottom: 8 },
+  textStrikethrough: { textDecorationLine: 'line-through', color: '#9ca3af', opacity: 0.5 },
+
+  // Qty Controller
+  qtyController: { flexDirection: 'row', alignItems: 'center' },
+  qtyBtn: { 
+    width: 28, 
+    height: 28, 
+    backgroundColor: '#fff', 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1.5, 
+    borderColor: '#d1fae5' 
+  },
+  qtyValueText: { marginHorizontal: 12, fontSize: 15, fontWeight: '800', color: '#1f2937', minWidth: 20, textAlign: 'center' },
+
+  // Price Area
   priceActionArea: { alignItems: 'flex-end' },
-  priceInput: { width: 85, height: 36, backgroundColor: '#f3f4f6', borderRadius: 8, textAlign: 'center', fontSize: 14, borderWidth: 1, borderColor: '#e5e7eb', color: '#111827' },
-  totalHintText: { fontSize: 10, color: '#10b981', fontWeight: 'bold', marginTop: 2 }
+  priceInputWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F9FAFB', 
+    borderRadius: 12, 
+    borderWidth: 1, 
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 8
+  },
+  currencyPrefix: { fontSize: 12, color: '#9ca3af', fontWeight: 'bold' },
+  priceInput: { 
+    width: 60, 
+    height: 40, 
+    textAlign: 'right', 
+    fontSize: 15, 
+    fontWeight: 'bold', 
+    color: '#111827' 
+  },
+  totalHintText: { fontSize: 11, color: '#10b981', fontWeight: '800', marginTop: 4 }
 });
