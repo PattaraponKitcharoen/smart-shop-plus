@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDB } from '../../services/db';
+import { getDB, initDatabase } from '../../services/db'; // 🚩 เพิ่ม initDatabase
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 export default function CartScreen() {
@@ -12,6 +12,23 @@ export default function CartScreen() {
   const fetchData = useShoppingStore((state) => state.fetchData);
 
   const [total, setTotal] = useState(0);
+  const [isDbReady, setIsDbReady] = useState(false);
+
+  // เตรียมความพร้อมของ DB
+  useFocusEffect(
+    useCallback(() => {
+      const prepare = async () => {
+        try {
+          await initDatabase();
+          setIsDbReady(true);
+          await fetchCart();
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      prepare();
+    }, [fetchCart])
+  );
 
   useEffect(() => {
     const sum = cartItems.reduce((acc, item) => {
@@ -21,54 +38,53 @@ export default function CartScreen() {
     setTotal(sum);
   }, [cartItems]);
 
-  useEffect(() => { fetchCart(); }, []);
+  // ฟังก์ชันจัดการการจ่ายเงิน (Logic หลักแยกออกมาเพื่อให้เรียกใช้ได้ทั้ง 2 Platform)
+  const processCheckout = async () => {
+    if (!isDbReady) return;
+    try {
+      const database = getDB();
+      await database.runAsync(`
+        UPDATE items 
+        SET last_price = CASE 
+                           WHEN current_price > 0 THEN current_price 
+                           ELSE last_price 
+                         END, 
+            is_checked = 0, 
+            is_active = 0, 
+            current_price = 0 
+        WHERE is_checked = 1
+      `);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchCart();
-    }, [fetchCart])
-  );
+      await fetchCart();
+      await fetchData();
 
-  const handleClearCart = async () => {
-  // บน Web ใช้ window.confirm แทน Alert.alert เพื่อความชัวร์ (หรือใช้ Alert.alert เดิมก็ได้)
-  const confirmText = 'บันทึกราคาล่าสุดและเคลียร์ตะกร้าสำหรับรอบถัดไป?';
-  
-  // โค้ดส่วน Alert.alert เดิม (ปรับเปลี่ยนตามความเหมาะสม)
-  Alert.alert('ยืนยันการจ่ายเงิน', confirmText, [
-    { text: 'ยกเลิก', style: 'cancel' },
-    { 
-      text: 'ยืนยัน', 
-      onPress: async () => {
-        try {
-          const database = getDB(); // 🚩 ดึง instance ของ db มา
-
-          await database.runAsync(`
-            UPDATE items 
-            SET last_price = CASE 
-                               WHEN current_price > 0 THEN current_price 
-                               ELSE last_price 
-                             END, 
-                is_checked = 0, 
-                is_active = 0, 
-                current_price = 0 
-            WHERE is_checked = 1
-          `);
-
-          await fetchCart(); 
-          await fetchData(); 
-
-          if (Platform.OS !== 'web') {
-            Alert.alert("สำเร็จ", "บันทึกประวัติการซื้อเรียบร้อยแล้ว");
-          } else {
-            alert("บันทึกประวัติการซื้อเรียบร้อยแล้ว"); // 🚩 ใช้ alert มาตรฐานบนเว็บ
-          }
-        } catch (error) {
-          console.error("Clear cart error:", error);
-        }
+      if (Platform.OS === 'web') {
+        alert("บันทึกประวัติการซื้อเรียบร้อยแล้ว");
+      } else {
+        Alert.alert("สำเร็จ", "บันทึกประวัติการซื้อเรียบร้อยแล้ว");
       }
+    } catch (error) {
+      console.error("Clear cart error:", error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
     }
-  ]);
-};
+  };
+
+  const handleClearCart = () => {
+    const confirmMsg = 'บันทึกราคาล่าสุดและเคลียร์ตะกร้าสำหรับรอบถัดไป?';
+
+    if (Platform.OS === 'web') {
+      // 🚩 บน Web ใช้ window.confirm แทน Alert.alert
+      if (window.confirm(confirmMsg)) {
+        processCheckout();
+      }
+    } else {
+      // บน Mobile ใช้ Alert.alert ปกติ
+      Alert.alert('ยืนยันการจ่ายเงิน', confirmMsg, [
+        { text: 'ยกเลิก', style: 'cancel' },
+        { text: 'ยืนยัน', onPress: processCheckout }
+      ]);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -138,7 +154,6 @@ export default function CartScreen() {
         <View style={{height: 120}} />
       </ScrollView>
 
-      {/* Footer ส่วนสรุปยอดที่ดูแพง */}
       <View style={styles.footer}>
         <View style={styles.totalContainer}>
             <View>
@@ -148,9 +163,9 @@ export default function CartScreen() {
             <Text style={styles.totalValue}>฿{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</Text>
         </View>
         <TouchableOpacity 
-          style={[styles.checkoutBtn, { opacity: cartItems.length === 0 ? 0.5 : 1 }]} 
+          style={[styles.checkoutBtn, { opacity: (cartItems.length === 0 || !isDbReady) ? 0.5 : 1 }]} 
           onPress={handleClearCart}
-          disabled={cartItems.length === 0}
+          disabled={cartItems.length === 0 || !isDbReady}
         >
           <Text style={styles.checkoutText}>ชำระเงินเสร็จสิ้น</Text>
           <FontAwesome5 name="arrow-right" size={16} color="#fff" style={{marginLeft: 12}} />
@@ -160,6 +175,7 @@ export default function CartScreen() {
   );
 }
 
+// ... styles เดิมของคุณทั้งหมด (ไม่ต้องแก้ไข) ...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
   header: { 
@@ -170,10 +186,7 @@ const styles = StyleSheet.create({
   },
   dateText: { fontSize: 12, color: '#10b981', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: -4 },
   title: { fontSize: 34, fontWeight: '900', color: '#1f2937', letterSpacing: -1.2 },
-  
   scrollArea: { paddingHorizontal: 20 },
-  
-  // Cart Item Card
   cartItem: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -188,11 +201,9 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 17, fontWeight: '700', color: '#1f2937' },
   qtyBadge: { backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 8 },
   qtyText: { fontSize: 12, fontWeight: '800', color: '#6b7280' },
-  
   priceDetailRow: { flexDirection: 'row', alignItems: 'center' },
   itemSub: { fontSize: 14, color: '#9ca3af' },
   priceHighlight: { fontWeight: '800', color: '#111827', fontSize: 16 },
-  
   diffBadge: { 
     flexDirection: 'row',
     alignItems: 'center',
@@ -203,14 +214,10 @@ const styles = StyleSheet.create({
   },
   diffBadgeText: { fontSize: 11, fontWeight: '900' },
   checkIconBox: { marginLeft: 15 },
-
-  // Empty State
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyIconBox: { width: 80, height: 80, backgroundColor: '#fff', borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: '#1f2937' },
   emptySub: { fontSize: 14, color: '#9ca3af', textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
-
-  // Footer
   footer: { 
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
