@@ -5,6 +5,7 @@ import {
     Alert,
     FlatList,
     Modal,
+    Platform, // 🚩 เพิ่ม Platform
     StyleSheet,
     Text,
     TextInput,
@@ -12,11 +13,11 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDB } from '../services/db';
+import { getDB, initDatabase } from '../services/db'; // 🚩 เพิ่ม initDatabase
 
 interface Aisle {
-    id: number; // id จำลองสำหรับ UI
-    name: string; // ใช้ name เป็นตัวอ้างอิงหลักใน DB
+    id: number; 
+    name: string; 
 }
 
 export default function ManageAislesScreen() {
@@ -25,85 +26,92 @@ export default function ManageAislesScreen() {
     const [modalVisible, setModalVisible] = useState(false);
     const [editingAisle, setEditingAisle] = useState<Aisle | null>(null);
     const [inputText, setInputText] = useState('');
+    const [isDbReady, setIsDbReady] = useState(false); // 🚩 เพิ่มตัวแปรเช็คความพร้อม
 
     useEffect(() => {
-        loadAisles();
+        const prepare = async () => {
+            try {
+                await initDatabase();
+                setIsDbReady(true);
+                await loadAisles();
+            } catch (e) {
+                console.error("Manage Aisle Init Error:", e);
+            }
+        };
+        prepare();
     }, []);
 
-    // ✅ 1. ดึงชื่อโซนแบบไม่ซ้ำกัน
     const loadAisles = async () => {
-  try {
-    const database = getDB(); // 🚩 ดึง instance มาก่อน
-    const result: any[] = await database.getAllAsync(
-      'SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name IS NOT NULL AND name != "" ORDER BY TRIM(name) ASC'
-    );
-    
-    const formattedAisles = result.map((item, index) => ({
-      id: index, 
-      name: item.name
-    }));
-    
-    setAisles(formattedAisles);
-  } catch (error) {
-    console.error("Load aisles error", error);
-  }
-};
-
-    // ✅ 2. บันทึกการแก้ไขโดยอ้างอิงจาก "ชื่อเดิม"
-    const handleSave = async () => {
-    if (!inputText.trim()) return;
-    try {
-        const database = getDB(); // 🚩 ดึง instance มาก่อน
-        
-        if (editingAisle) {
-            // อัปเดตทุกแถวที่มีชื่อเดิม
-            await database.runAsync(
-                'UPDATE aisles SET name = ? WHERE name = ?', 
-                [inputText.trim(), editingAisle.name]
+        try {
+            const database = getDB();
+            const result: any[] = await database.getAllAsync(
+                'SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name IS NOT NULL AND name != "" ORDER BY TRIM(name) ASC'
             );
-            // อัปเดตตาราง items ด้วย
-            await database.runAsync(
-                'UPDATE items SET aisle_id = (SELECT id FROM aisles WHERE name = ? LIMIT 1) WHERE aisle_id IN (SELECT id FROM aisles WHERE name = ?)',
-                [inputText.trim(), editingAisle.name]
-            );
-        } else {
-            // เพิ่มโซนใหม่
-            await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [inputText.trim()]);
+            
+            const formattedAisles = result.map((item, index) => ({
+                id: index, 
+                name: item.name
+            }));
+            
+            setAisles(formattedAisles);
+        } catch (error) {
+            console.error("Load aisles error", error);
         }
+    };
 
-        setInputText('');
-        setEditingAisle(null);
-        setModalVisible(false);
-        await loadAisles();
-    } catch (error) {
-        console.error(error);
-        Alert.alert("Error", "ไม่สามารถบันทึกข้อมูลได้");
-    }
-};
+    const handleSave = async () => {
+        if (!inputText.trim() || !isDbReady) return;
+        try {
+            const database = getDB();
+            
+            if (editingAisle) {
+                // อัปเดตทุกแถวที่มีชื่อเดิม
+                await database.runAsync(
+                    'UPDATE aisles SET name = ? WHERE name = ?', 
+                    [inputText.trim(), editingAisle.name]
+                );
+                // อัปเดตตาราง items ด้วย
+                await database.runAsync(
+                    'UPDATE items SET aisle_id = (SELECT id FROM aisles WHERE name = ? LIMIT 1) WHERE aisle_id IN (SELECT id FROM aisles WHERE name = ?)',
+                    [inputText.trim(), editingAisle.name]
+                );
+            } else {
+                // เพิ่มโซนใหม่
+                await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [inputText.trim()]);
+            }
 
-    // ✅ 3. ลบทุกแถวที่มีชื่อเดียวกัน
+            setInputText('');
+            setEditingAisle(null);
+            setModalVisible(false);
+            await loadAisles();
+        } catch (error) {
+            console.error(error);
+            if (Platform.OS === 'web') alert("ไม่สามารถบันทึกข้อมูลได้");
+            else Alert.alert("Error", "ไม่สามารถบันทึกข้อมูลได้");
+        }
+    };
+
     const confirmDelete = (aisle: Aisle) => {
-        Alert.alert(
-            "ลบโซนสินค้า",
-            `คุณต้องการลบโซน "${aisle.name}" ใช่หรือไม่? (สินค้าในโซนนี้จะไม่หายไปแต่จะไม่มีโซนระบุ)`,
-            [
+        const msg = `คุณต้องการลบโซน "${aisle.name}" ใช่หรือไม่? (สินค้าในโซนนี้จะไม่หายไปแต่จะไม่มีโซนระบุ)`;
+        
+        const performDelete = async () => {
+            try {
+                const database = getDB();
+                await database.runAsync('DELETE FROM aisles WHERE name = ?', [aisle.name]);
+                await loadAisles();
+            } catch (error) {
+                console.error(error);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(msg)) performDelete();
+        } else {
+            Alert.alert("ลบโซนสินค้า", msg, [
                 { text: "ยกเลิก", style: "cancel" },
-                { 
-                    text: "ลบ", 
-                    style: "destructive", 
-                    // 🚩 ในส่วน onPress ของ Alert.alert
-onPress: async () => {
-    try {
-        const database = getDB(); // 🚩 ดึง instance มา
-        await database.runAsync('DELETE FROM aisles WHERE name = ?', [aisle.name]);
-        await loadAisles();
-    } catch (error) {
-        console.error(error);
-    }
-}
-                }
-            ]
-        );
+                { text: "ลบ", style: "destructive", onPress: performDelete }
+            ]);
+        }
     };
 
     return (
@@ -119,7 +127,6 @@ onPress: async () => {
             <View style={styles.content}>
                 <FlatList
                     data={aisles}
-                    // ✅ ใช้ชื่อเป็น Key เพื่อป้องกันการ Render ซ้ำซ้อน
                     keyExtractor={(item) => item.name} 
                     renderItem={({ item }) => (
                         <View style={styles.listItem}>
@@ -144,19 +151,22 @@ onPress: async () => {
                     )}
                     contentContainerStyle={styles.listPadding}
                     ListEmptyComponent={
-                        <Text style={{ textAlign: 'center', marginTop: 40, color: '#9ca3af' }}>ยังไม่มีโซนสินค้า</Text>
+                        <Text style={{ textAlign: 'center', marginTop: 40, color: '#9ca3af' }}>
+                            {!isDbReady ? 'กำลังโหลดฐานข้อมูล...' : 'ยังไม่มีโซนสินค้า'}
+                        </Text>
                     }
                 />
             </View>
 
             <TouchableOpacity 
-                style={styles.fab}
-                onPress={() => { setEditingAisle(null); setInputText(''); setModalVisible(true); }}
+                style={[styles.fab, !isDbReady && { opacity: 0.5 }]}
+                onPress={() => { if(isDbReady) { setEditingAisle(null); setInputText(''); setModalVisible(true); } }}
+                disabled={!isDbReady}
             >
                 <FontAwesome5 name="plus" size={20} color="#fff" />
             </TouchableOpacity>
 
-            <Modal visible={modalVisible} animationType="fade" transparent>
+            <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>{editingAisle ? 'แก้ไขชื่อโซน' : 'เพิ่มโซนใหม่'}</Text>
@@ -165,6 +175,7 @@ onPress: async () => {
                             value={inputText}
                             onChangeText={setInputText}
                             placeholder="เช่น ของสด, ขนม..."
+                            placeholderTextColor="#9ca3af" // 🚩 บังคับสี placeholder
                             autoFocus
                         />
                         <View style={styles.modalButtons}>
@@ -211,7 +222,15 @@ const styles = StyleSheet.create({
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%' },
     modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
-    input: { backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20 },
+    input: { 
+        backgroundColor: '#F3F4F6', 
+        borderRadius: 12, 
+        padding: 15, 
+        fontSize: 16, 
+        marginBottom: 20,
+        color: '#1f2937',
+        ...Platform.select({ web: { outlineStyle: 'none' } }) // 🚩 ลบขอบฟ้าบนเว็บ
+    },
     modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
     btnCancel: { flex: 1, padding: 15, alignItems: 'center' },
     btnSave: { flex: 1, backgroundColor: '#10b981', padding: 15, borderRadius: 12, alignItems: 'center' },
