@@ -1,38 +1,39 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../services/db';
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 export default function CartScreen() {
-  const { fetchData } = useShoppingStore();
-  const [cartItems, setCartItems] = useState<any[]>([]);
+  // ✅ แก้จากดึงรวม เป็นดึงแยกแบบ Selector (วิธีนี้จะบังคับให้หน้าจอ Refresh 100% เมื่อข้อมูลเปลี่ยน)
+  const cartItems = useShoppingStore((state) => state.cartItems);
+  const fetchCart = useShoppingStore((state) => state.fetchCart);
+  const fetchData = useShoppingStore((state) => state.fetchData);
+
   const [total, setTotal] = useState(0);
 
-  const fetchCart = async () => {
-    try {
-      const result: any[] = await db.getAllAsync(
-        'SELECT id, name, last_price, current_price, quantity FROM items WHERE is_checked = 1'
-      );
-      setCartItems(result);
-      
-      const sum = result.reduce((acc, item) => {
-        const priceToSum = (item.current_price || 0) > 0 ? item.current_price : (item.last_price || 0);
-        return acc + (priceToSum * (item.quantity || 1));
-      }, 0);
-      
-      setTotal(sum);
-    } catch (error) {
-      console.error("Fetch cart error:", error);
-    }
-  };
+  // ✅ คำนวณยอดรวมใหม่ทุกครั้งที่ cartItems ใน Store มีการเปลี่ยนแปลง
+  useEffect(() => {
+    const sum = cartItems.reduce((acc, item) => {
+      const priceToSum = (item.current_price || 0) > 0 ? item.current_price : (item.last_price || 0);
+      return acc + (priceToSum * (item.quantity || 1));
+    }, 0);
+    setTotal(sum);
+  }, [cartItems]);
+
+  // ✅ ให้ใช้ useEffect ธรรมดาคู่กับ useFocusEffect เพื่อความชัวร์
+  useEffect(() => {
+    fetchCart();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       fetchCart();
-    }, [])
+    }, [fetchCart])
   );
+
+  // ... ส่วน handleClearCart และ return UI ด้านล่างเหมือนเดิมเป๊ะครับ ...
 
   const handleClearCart = async () => {
     Alert.alert('ยืนยันการจ่ายเงิน', 'บันทึกราคาและปิดรายการซื้อรอบนี้', [
@@ -52,8 +53,11 @@ export default function CartScreen() {
                   current_price = 0 
               WHERE is_checked = 1
             `);
+            
+            // ✅ สั่งให้ Store โหลดข้อมูลใหม่ทั้งสองส่วน
             await fetchCart(); 
             await fetchData(); 
+            Alert.alert("สำเร็จ", "บันทึกประวัติการซื้อเรียบร้อยแล้ว");
           } catch (error) {
             console.error("Clear cart error:", error);
           }
@@ -70,53 +74,57 @@ export default function CartScreen() {
       </View>
 
       <ScrollView style={styles.list}>
-        {cartItems.map((item) => {
-          const isPriceNotEntered = (item.current_price || 0) === 0;
-          const displayUnitPrice = isPriceNotEntered ? (item.last_price || 0) : item.current_price;
-          const itemTotal = displayUnitPrice * (item.quantity || 1);
-          
-          const lastPrice = item.last_price || 0;
-          const diffPerUnit = isPriceNotEntered ? 0 : (item.current_price - lastPrice);
-          // ✅ คำนวณยอดเปลี่ยนแปลงรวม (Diff x Quantity)
-          const totalDiff = diffPerUnit * (item.quantity || 1);
-          const hasLastPrice = lastPrice > 0;
+        {cartItems.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <FontAwesome5 name="shopping-basket" size={50} color="#d1d5db" />
+            <Text style={{ color: '#9ca3af', marginTop: 10 }}>ยังไม่มีสินค้าในตะกร้า</Text>
+          </View>
+        ) : (
+          cartItems.map((item) => {
+            const isPriceNotEntered = (item.current_price || 0) === 0;
+            const displayUnitPrice = isPriceNotEntered ? (item.last_price || 0) : item.current_price;
+            const itemTotal = displayUnitPrice * (item.quantity || 1);
+            
+            const lastPrice = item.last_price || 0;
+            const diffPerUnit = isPriceNotEntered ? 0 : (item.current_price - lastPrice);
+            const totalDiff = diffPerUnit * (item.quantity || 1);
+            const hasLastPrice = lastPrice > 0;
 
-          return (
-            <View key={item.id} style={styles.cartItem}>
-              <View style={styles.itemInfo}>
-                <View style={styles.nameRow}>
-                   <Text style={styles.itemName}>{item.name}</Text>
-                   {item.quantity > 1 && (
-                     <Text style={styles.qtyText}>x{item.quantity}</Text>
-                   )}
-                   {/* ✅ 1. ส่วนต่างราคาต่อหน่วย ย้ายมาอยู่หลังชื่อ/จำนวน */}
-                   {!isPriceNotEntered && hasLastPrice && diffPerUnit !== 0 && (
-                     <Text style={[styles.unitDiffText, { color: diffPerUnit > 0 ? '#ef4444' : '#10b981' }]}>
-                       {diffPerUnit > 0 ? ` (+${diffPerUnit.toFixed(2)})` : ` (${diffPerUnit.toFixed(2)})`}
-                     </Text>
-                   )}
-                </View>
-                
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                  <Text style={styles.itemSub}>
-                    {item.quantity > 1 ? `${item.quantity} x ฿${displayUnitPrice.toFixed(2)} = ` : 'วันนี้: '}
-                    <Text style={styles.priceHighlight}>฿{itemTotal.toFixed(2)}</Text>
-                  </Text>
-
-                  {/* ✅ 2. ยอดราคาเปลี่ยนแปลงรวม (Total Diff) ใส่ไว้หลังราคารวม */}
-                  {!isPriceNotEntered && hasLastPrice && totalDiff !== 0 && (
-                    <View style={[styles.diffBadge, { backgroundColor: totalDiff > 0 ? '#fee2e2' : '#dcfce7' }]}>
-                      <Text style={[styles.diffBadgeText, { color: totalDiff > 0 ? '#ef4444' : '#15803d' }]}>
-                        {totalDiff > 0 ? `+฿${totalDiff.toFixed(0)}` : `-฿${Math.abs(totalDiff).toFixed(0)}`}
+            return (
+              <View key={item.id} style={styles.cartItem}>
+                <View style={styles.itemInfo}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    {item.quantity > 1 && (
+                      <Text style={styles.qtyText}>x{item.quantity}</Text>
+                    )}
+                    {!isPriceNotEntered && hasLastPrice && diffPerUnit !== 0 && (
+                      <Text style={[styles.unitDiffText, { color: diffPerUnit > 0 ? '#ef4444' : '#10b981' }]}>
+                        {diffPerUnit > 0 ? ` (+${diffPerUnit.toFixed(2)})` : ` (${diffPerUnit.toFixed(2)})`}
                       </Text>
-                    </View>
-                  )}
+                    )}
+                  </View>
+                  
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                    <Text style={styles.itemSub}>
+                      {item.quantity > 1 ? `${item.quantity} x ฿${displayUnitPrice.toFixed(2)} = ` : 'วันนี้: '}
+                      <Text style={styles.priceHighlight}>฿{itemTotal.toFixed(2)}</Text>
+                    </Text>
+
+                    {!isPriceNotEntered && hasLastPrice && totalDiff !== 0 && (
+                      <View style={[styles.diffBadge, { backgroundColor: totalDiff > 0 ? '#fee2e2' : '#dcfce7' }]}>
+                        <Text style={[styles.diffBadgeText, { color: totalDiff > 0 ? '#ef4444' : '#15803d' }]}>
+                          {totalDiff > 0 ? `+฿${totalDiff.toFixed(0)}` : `-฿${Math.abs(totalDiff).toFixed(0)}`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
+                <FontAwesome5 name="check-circle" size={20} color="#10b981" />
               </View>
-              <FontAwesome5 name="check-circle" size={20} color="#10b981" />
-            </View>
-          );
-        })}
+            );
+          })
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -124,7 +132,11 @@ export default function CartScreen() {
           <Text style={styles.totalLabel}>ยอดรวมที่ต้องจ่าย</Text>
           <Text style={styles.totalValue}>฿{total.toFixed(2)}</Text>
         </View>
-        <TouchableOpacity style={styles.checkoutBtn} onPress={handleClearCart}>
+        <TouchableOpacity 
+          style={[styles.checkoutBtn, { opacity: cartItems.length === 0 ? 0.5 : 1 }]} 
+          onPress={handleClearCart}
+          disabled={cartItems.length === 0}
+        >
           <Text style={styles.checkoutText}>ชำระเงินเสร็จสิ้น</Text>
         </TouchableOpacity>
       </View>
@@ -134,7 +146,7 @@ export default function CartScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { padding: 24, backgroundColor: '#fff' },
+  header: { padding: 24, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   title: { fontSize: 24, fontWeight: 'bold', color: '#1f2937' },
   count: { fontSize: 14, color: '#6b7280', marginTop: 4 },
   list: { padding: 16 },
@@ -155,7 +167,6 @@ const styles = StyleSheet.create({
   unitDiffText: { fontSize: 13, fontWeight: 'bold' },
   itemSub: { fontSize: 13, color: '#6b7280' },
   priceHighlight: { fontWeight: 'bold', color: '#111827', fontSize: 15 },
-  // ✅ Style สำหรับ Badge บอกยอดรวมความเปลี่ยนแปลง
   diffBadge: { 
     marginLeft: 8, 
     paddingHorizontal: 6, 

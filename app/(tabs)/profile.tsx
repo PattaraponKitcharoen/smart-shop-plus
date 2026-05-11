@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput, // เพิ่ม TextInput
   TouchableOpacity,
   View
 } from 'react-native';
@@ -27,11 +28,15 @@ export default function ProfileScreen() {
   const fetchData = useShoppingStore((state) => state.fetchData);
 
   const handleSaveName = () => {
+    if (tempName.trim() === '') {
+      Alert.alert("ผิดพลาด", "กรุณาระบุชื่อที่ต้องการ");
+      return;
+    }
     setName(tempName);
     setIsEditing(false);
   };
 
-  // --- 📤 ฟังก์ชัน Export (แก้บั๊ก UTF8 แล้ว) ---
+  // --- 📤 ฟังก์ชัน Export ---
   const handleExportCSV = async () => {
     try {
       const allItems: any[] = await db.getAllAsync(`
@@ -56,7 +61,6 @@ export default function ProfileScreen() {
       const fileName = `smart-shop-export-${Date.now()}.csv`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
-      // ✅ แก้ไข: ใช้ "utf8" (ตัวเล็กทั้งหมด) แทน FileSystem.EncodingType.UTF8 เพื่อลดโอกาส Error
       await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: "utf8" });
       await Sharing.shareAsync(fileUri);
     } catch (error) {
@@ -99,7 +103,6 @@ export default function ProfileScreen() {
 
         const storeObj: any = await db.getFirstAsync('SELECT id FROM stores WHERE name = ?', [storeName]);
         const aisleObj: any = await db.getFirstAsync('SELECT id FROM aisles WHERE name = ?', [aisleName]);
-
         const existingItem: any = await db.getFirstAsync('SELECT id FROM items WHERE name = ?', [itemName]);
 
         if (existingItem) {
@@ -109,9 +112,9 @@ export default function ProfileScreen() {
           );
         } else {
           await db.runAsync(
-    'INSERT INTO items (name, last_price, quantity, store_id, aisle_id, is_active, is_checked) VALUES (?, ?, ?, ?, ?, 0, 0)',
-    [itemName, parseFloat(price), parseInt(qty), storeObj?.id || null, aisleObj?.id || null]
-  );
+            'INSERT INTO items (name, last_price, quantity, store_id, aisle_id, is_active, is_checked) VALUES (?, ?, ?, ?, ?, 0, 0)',
+            [itemName, parseFloat(price), parseInt(qty), storeObj?.id || null, aisleObj?.id || null]
+          );
         }
         importedCount++;
       }
@@ -140,22 +143,53 @@ export default function ProfileScreen() {
       {/* Header ส่วนโปรไฟล์ */}
       <View style={styles.header}>
         <View style={styles.profileInfo}>
-          <TouchableOpacity style={styles.avatarWrapper}>
+          <TouchableOpacity 
+            style={styles.avatarWrapper}
+            onPress={() => Alert.alert("Coming Soon", "ระบบเปลี่ยนรูปโปรไฟล์จะตามมาเร็วๆ นี้")}
+          >
             <Image 
               source={{ uri: `https://ui-avatars.com/api/?name=${name}&background=10b981&color=fff` }} 
               style={styles.avatar} 
             />
+            <View style={styles.cameraBadge}>
+              <FontAwesome5 name="camera" size={8} color="#fff" />
+            </View>
           </TouchableOpacity>
+
           <View style={styles.textInfo}>
-             <View style={styles.nameRow}>
+            {isEditing ? (
+              <View style={styles.editNameContainer}>
+                <TextInput
+                  style={styles.nameInput}
+                  value={tempName}
+                  onChangeText={setTempName}
+                  autoFocus
+                  placeholder="ใส่ชื่อของคุณ"
+                />
+                <TouchableOpacity style={styles.saveIconBtn} onPress={handleSaveName}>
+                  <FontAwesome5 name="check" size={16} color="#10b981" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.nameRow} 
+                onPress={() => {
+                  setTempName(name);
+                  setIsEditing(true);
+                }}
+              >
                 <Text style={styles.userName}>{name}</Text>
-             </View>
-            <Text style={styles.offlineStatus}>ข้อมูลเก็บในเครื่องเท่านั้น</Text>
+                <FontAwesome5 name="pen" size={12} color="#9ca3af" style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+            )}
+            <View style={styles.statusRow}>
+               <View style={styles.onlineDot} />
+               <Text style={styles.offlineStatus}>ข้อมูลเก็บในเครื่องเท่านั้น</Text>
+            </View>
           </View>
         </View>
       </View>
 
-      {/* ✅ ส่วนที่หายไป: การตั้งค่าการช้อปปิ้ง */}
       <Text style={styles.sectionTitle}>การตั้งค่าการช้อปปิ้ง</Text>
       <View style={styles.menuContainer}>
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/manage-stores')}>
@@ -183,7 +217,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ส่วนการจัดการข้อมูลไฟล์ */}
       <Text style={styles.sectionTitle}>สำรองและกู้คืนข้อมูล</Text>
       <View style={styles.menuContainer}>
         <TouchableOpacity style={styles.menuItem} onPress={handleExportCSV}>
@@ -219,10 +252,16 @@ const styles = StyleSheet.create({
   profileInfo: { flexDirection: 'row', alignItems: 'center' },
   avatarWrapper: { position: 'relative' },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E5E7EB' },
+  cameraBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#10b981', width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   textInfo: { marginLeft: 20, flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
   userName: { fontSize: 22, fontWeight: 'bold', color: '#1f2937' },
-  offlineStatus: { fontSize: 12, color: '#6b7280', marginTop: 4 },
+  editNameContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 10 },
+  nameInput: { fontSize: 18, fontWeight: 'bold', color: '#1f2937', paddingVertical: 4, flex: 1 },
+  saveIconBtn: { padding: 10 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981', marginRight: 6 },
+  offlineStatus: { fontSize: 12, color: '#6b7280' },
   sectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#9ca3af', marginLeft: 24, marginTop: 24, marginBottom: 8, textTransform: 'uppercase' },
   menuContainer: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },

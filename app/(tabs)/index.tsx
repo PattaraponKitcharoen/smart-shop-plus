@@ -70,6 +70,7 @@ export default function ShoppingScreen() {
   };
 
   const handleCheckItem = (dbId: number) => {
+    // 1. ถ้ามีการกดซ้ำในขณะที่กำลังนับถอยหลัง (Cancel)
     if (pendingChecks[dbId]) {
       clearTimeout(pendingChecks[dbId]);
       setPendingChecks(prev => {
@@ -80,9 +81,16 @@ export default function ShoppingScreen() {
       return;
     }
 
+    // 2. เริ่มนับถอยหลัง 2 วินาทีเพื่อติ๊กถูก (Visual Effect ในหน้าหลัก)
     const timer = setTimeout(async () => {
+      // ✅ สั่ง LayoutAnimation เพื่อความนุ่มนวล
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      
+      // ✅ เรียกใช้ toggleItem จาก Store 
+      // (ซึ่งข้างใน Store เราเขียนไว้แล้วว่าให้ fetchData ทันที และรอ 3 วิเพื่อ fetchCart)
       await toggleItem(dbId, true); 
+
+      // ลบสถานะ Pending ออกหลังจากทำงานเสร็จ
       setPendingChecks(prev => {
         const newState = { ...prev };
         delete newState[dbId];
