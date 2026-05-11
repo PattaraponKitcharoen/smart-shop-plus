@@ -1,29 +1,37 @@
 import * as SQLite from 'expo-sqlite';
 
-export const db = SQLite.openDatabaseSync('shopping.db');
+// สร้างตัวแปรไว้เก็บ Instance ของ Database
+let db: SQLite.SQLiteDatabase | null = null;
 
+/**
+ * ฟังก์ชันเริ่มต้นระบบฐานข้อมูล (เรียกใช้ครั้งเดียวตอนเปิดแอป)
+ */
 export const initDatabase = async () => {
   try {
+    // 1. เปิดฐานข้อมูลแบบ Async (จำเป็นมากสำหรับ Web เพื่อป้องกัน Timeout)
+    db = await SQLite.openDatabaseAsync('shopping.db');
+
+    // 2. สร้างตารางพื้นฐาน
     await db.execAsync(`
       PRAGMA foreign_keys = ON;
 
-      -- 1. ตารางร้านค้า (อิสระ)
+      -- ตารางร้านค้า
       CREATE TABLE IF NOT EXISTS stores (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         name TEXT UNIQUE
       );
 
-      -- 2. ตารางโซน (อิสระ - ไม่มี store_id แล้ว เพื่อให้ใช้ซ้ำได้ทุกร้าน)
+      -- ตารางโซน/ชั้นวาง
       CREATE TABLE IF NOT EXISTS aisles (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         name TEXT UNIQUE
       );
 
-      -- 3. ตารางสินค้า (เป็นตัวเชื่อม Store และ Aisle)
+      -- ตารางสินค้า
       CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        store_id INTEGER, -- เชื่อมกับร้านค้าโดยตรง
-        aisle_id INTEGER, -- เชื่อมกับโซนโดยตรง
+        store_id INTEGER,
+        aisle_id INTEGER,
         name TEXT, 
         last_price REAL DEFAULT 0, 
         current_price REAL DEFAULT 0, 
@@ -34,26 +42,35 @@ export const initDatabase = async () => {
         FOREIGN KEY (aisle_id) REFERENCES aisles (id) ON DELETE CASCADE
       );
     `);
-    
-    // --- ระบบ Migration (ปรับปรุงคอลัมน์) ---
 
-    // เพิ่ม store_id ใน items (กรณีมีตารางเก่าที่ยังไม่มีคอลัมน์นี้)
-    try {
-      await db.execAsync(`ALTER TABLE items ADD COLUMN store_id INTEGER;`);
-      console.log("✅ Added store_id column to items");
-    } catch (e) { /* มีแล้ว */ }
+    // 3. ระบบ Migration (กันเหนียวสำหรับกรณีตารางเก่าไม่มีคอลัมน์ใหม่)
+    const migrations = [
+      `ALTER TABLE items ADD COLUMN store_id INTEGER;`,
+      `ALTER TABLE items ADD COLUMN is_active INTEGER DEFAULT 1;`,
+      `ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1;`
+    ];
 
-    // ตรวจสอบคอลัมน์อื่นๆ
-    try {
-      await db.execAsync(`ALTER TABLE items ADD COLUMN is_active INTEGER DEFAULT 1;`);
-    } catch (e) { /* มีแล้ว */ }
+    for (const sql of migrations) {
+      try {
+        await db.execAsync(sql);
+      } catch (e) {
+        // ถ้า Error แปลว่ามีคอลัมน์นั้นอยู่แล้ว ข้ามไปได้เลย
+      }
+    }
 
-    try {
-      await db.execAsync(`ALTER TABLE items ADD COLUMN quantity INTEGER DEFAULT 1;`);
-    } catch (e) { /* มีแล้ว */ }
-
-    console.log("✅ Database structure updated: Stores and Aisles are now independent!");
+    console.log("✅ Database initialized successfully (Async Mode)");
   } catch (e) {
     console.error("❌ DB Init Error:", e);
+    throw e; // ส่งต่อ error เพื่อให้หน้า UI รู้
   }
+};
+
+/**
+ * ฟังก์ชันสำหรับดึง Database Instance ไปใช้งานในหน้าอื่นๆ
+ */
+export const getDB = () => {
+  if (!db) {
+    throw new Error("Database not initialized. Please call initDatabase() first.");
+  }
+  return db;
 };

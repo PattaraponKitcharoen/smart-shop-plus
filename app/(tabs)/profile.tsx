@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { db } from '../../services/db';
+import { getDB } from '../../services/db';
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 export default function ProfileScreen() {
@@ -37,10 +38,11 @@ export default function ProfileScreen() {
     setIsEditing(false);
   };
 
-  // --- 📤 ฟังก์ชัน Export ---
+  // --- 📤 ฟังก์ชัน Export (ฉบับแก้ให้รันได้ทั้ง Web และ Mobile) ---
   const handleExportCSV = async () => {
     try {
-      const allItems: any[] = await db.getAllAsync(`
+      const database = getDB();
+      const allItems: any[] = await database.getAllAsync(`
         SELECT items.id, items.name as itemName, items.last_price as price,
                items.quantity as qty, aisles.name as aisleName, stores.name as storeName
         FROM items 
@@ -60,11 +62,32 @@ export default function ProfileScreen() {
       
       const csvContent = header + rows;
       const fileName = `smart-shop-export-${Date.now()}.csv`;
-      const fileUri = FileSystem.documentDirectory + fileName;
 
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: "utf8" });
-      await Sharing.shareAsync(fileUri);
+      // 🚩 ส่วนที่เพิ่มเข้ามาสำหรับมาตรฐาน Web API
+      if (Platform.OS === 'web') {
+        // 1. สร้าง Blob (ก้อนข้อมูลไฟล์)
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        // 2. สร้าง URL ชั่วคราวสำหรับดาวน์โหลด
+        const url = window.URL.createObjectURL(blob);
+        // 3. สร้างปุ่มดาวน์โหลดปลอมๆ ขึ้นมาแล้วสั่งคลิกเอง
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        // 4. ทำความสะอาด
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        console.log("✅ Web Export Success");
+      } else {
+        // 🚩 สำหรับ iOS / Android (ใช้โค้ดเดิมของคุณ)
+        const fileUri = FileSystem.documentDirectory + fileName;
+        await FileSystem.writeAsStringAsync(fileUri, csvContent, { encoding: "utf8" });
+        await Sharing.shareAsync(fileUri);
+      }
     } catch (error) {
+      console.error(error);
       Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถส่งออกข้อมูลได้");
     }
   };
@@ -76,6 +99,8 @@ export default function ProfileScreen() {
         type: 'text/comma-separated-values',
         copyToCacheDirectory: true,
       });
+
+      const database = getDB();
 
       if (result.canceled) return;
 
@@ -96,29 +121,29 @@ export default function ProfileScreen() {
         const storeName = rawStore.replace(/"/g, '');
 
         if (storeName && storeName !== 'No Store') {
-          await db.runAsync('INSERT OR IGNORE INTO stores (name) VALUES (?)', [storeName]);
-        }
-        if (aisleName && aisleName !== 'No Category') {
-          await db.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [aisleName]);
-        }
-
-        const storeObj: any = await db.getFirstAsync('SELECT id FROM stores WHERE name = ?', [storeName]);
-        const aisleObj: any = await db.getFirstAsync('SELECT id FROM aisles WHERE name = ?', [aisleName]);
-        const existingItem: any = await db.getFirstAsync('SELECT id FROM items WHERE name = ?', [itemName]);
-
-        if (existingItem) {
-          await db.runAsync(
-            'UPDATE items SET last_price = ?, quantity = ?, store_id = ?, aisle_id = ? WHERE id = ?',
-            [parseFloat(price), parseInt(qty), storeObj?.id || null, aisleObj?.id || null, existingItem.id]
-          );
-        } else {
-          await db.runAsync(
-            'INSERT INTO items (name, last_price, quantity, store_id, aisle_id, is_active, is_checked) VALUES (?, ?, ?, ?, ?, 0, 0)',
-            [itemName, parseFloat(price), parseInt(qty), storeObj?.id || null, aisleObj?.id || null]
-          );
-        }
-        importedCount++;
+        await database.runAsync('INSERT OR IGNORE INTO stores (name) VALUES (?)', [storeName]);
       }
+      if (aisleName && aisleName !== 'No Category') {
+        await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [aisleName]);
+      }
+
+      const storeObj: any = await database.getFirstAsync('SELECT id FROM stores WHERE name = ?', [storeName]);
+      const aisleObj: any = await database.getFirstAsync('SELECT id FROM aisles WHERE name = ?', [aisleName]);
+      const existingItem: any = await database.getFirstAsync('SELECT id FROM items WHERE name = ?', [itemName]);
+
+      if (existingItem) {
+        await database.runAsync(
+          'UPDATE items SET last_price = ?, quantity = ?, store_id = ?, aisle_id = ? WHERE id = ?',
+          [parseFloat(price), parseInt(qty), storeObj?.id || null, aisleObj?.id || null, existingItem.id]
+        );
+      } else {
+        await database.runAsync(
+          'INSERT INTO items (name, last_price, quantity, store_id, aisle_id, is_active, is_checked) VALUES (?, ?, ?, ?, ?, 0, 0)',
+          [itemName, parseFloat(price), parseInt(qty), storeObj?.id || null, aisleObj?.id || null]
+        );
+      }
+      importedCount++;
+    }
 
       await fetchData();
       Alert.alert("สำเร็จ", `นำเข้าข้อมูลเรียบร้อยแล้ว ${importedCount} รายการ`);
@@ -135,10 +160,11 @@ export default function ProfileScreen() {
             style: 'destructive',
             onPress: async () => {
                 try {
-                    await db.runAsync('DELETE FROM items');
-                    await db.runAsync('DELETE FROM aisles');
-                    await db.runAsync('DELETE FROM stores');
-                    await fetchData();
+                    const database = getDB();
+      await database.runAsync('DELETE FROM items');
+      await database.runAsync('DELETE FROM aisles');
+      await database.runAsync('DELETE FROM stores');
+      await fetchData();
                     Alert.alert("สำเร็จ", "ล้างข้อมูลเรียบร้อยแล้ว");
                   } catch (error) {
                     Alert.alert("ผิดพลาด", "ไม่สามารถล้างข้อมูลได้");

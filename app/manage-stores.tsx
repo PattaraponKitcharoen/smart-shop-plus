@@ -12,7 +12,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db } from '../services/db'; // แก้ path เล็กน้อยเพราะออกมาอยู่นอก (tabs)
+import { getDB } from '../services/db';
 
 interface Store {
   id: number;
@@ -31,30 +31,32 @@ export default function ManageStoresScreen() {
   }, []);
 
   const loadStores = async () => {
-    try {
-      const result: Store[] = await db.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
-      setStores(result);
-    } catch (error) {
-      console.error("Load stores error", error);
-    }
-  };
+  try {
+    const database = getDB(); // 🚩 ดึง instance มาก่อน
+    const result: Store[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
+    setStores(result);
+  } catch (error) {
+    console.error("Load stores error", error);
+  }
+};
 
   const handleSave = async () => {
-    if (!inputText.trim()) return;
-    try {
-      if (editingStore) {
-        await db.runAsync('UPDATE stores SET name = ? WHERE id = ?', [inputText.trim(), editingStore.id]);
-      } else {
-        await db.runAsync('INSERT INTO stores (name) VALUES (?)', [inputText.trim()]);
-      }
-      setInputText('');
-      setEditingStore(null);
-      setModalVisible(false);
-      loadStores();
-    } catch (error) {
-      Alert.alert("Error", "ชื่อร้านนี้อาจจะมีอยู่แล้ว");
+  if (!inputText.trim()) return;
+  try {
+    const database = getDB(); // 🚩 ดึง instance มาก่อน
+    if (editingStore) {
+      await database.runAsync('UPDATE stores SET name = ? WHERE id = ?', [inputText.trim(), editingStore.id]);
+    } else {
+      await database.runAsync('INSERT INTO stores (name) VALUES (?)', [inputText.trim()]);
     }
-  };
+    setInputText('');
+    setEditingStore(null);
+    setModalVisible(false);
+    await loadStores(); // 🚩 อย่าลืมเติม await
+  } catch (error) {
+    Alert.alert("Error", "ชื่อร้านนี้อาจจะมีอยู่แล้ว");
+  }
+};
 
   const confirmDelete = (store: Store) => {
     Alert.alert(
@@ -65,10 +67,16 @@ export default function ManageStoresScreen() {
         { 
           text: "ลบ", 
           style: "destructive", 
-          onPress: async () => {
-            await db.runAsync('DELETE FROM stores WHERE id = ?', [store.id]);
-            loadStores();
-          } 
+          // 🚩 ในส่วน onPress ภายใน Alert.alert
+onPress: async () => {
+  try {
+    const database = getDB(); // 🚩 ดึง instance มา
+    await database.runAsync('DELETE FROM stores WHERE id = ?', [store.id]);
+    await loadStores();
+  } catch (error) {
+    console.error(error);
+  }
+}
         }
       ]
     );

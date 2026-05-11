@@ -12,7 +12,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db } from '../../services/db';
+import { getDB, initDatabase } from '../../services/db';
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -26,16 +26,23 @@ export default function ShoppingScreen() {
   const [pendingChecks, setPendingChecks] = useState<Record<number, any>>({});
 
   useEffect(() => {
-    const prepare = async () => {
-      try {
-        await fetchData();
-        setIsReady(true);
-      } catch (e) {
-        setTimeout(prepare, 500);
-      }
-    };
-    prepare();
-  }, []);
+  const prepare = async () => {
+    try {
+      // 🚩 1. สั่งเปิด Database แบบ Async ก่อนเลย
+      await initDatabase(); 
+      
+      // 🚩 2. พอ DB พร้อมค่อยดึงข้อมูล
+      await fetchData();
+      
+      setIsReady(true);
+    } catch (e) {
+      console.error("Prepare Error:", e);
+      // ถ้าพังให้ลองใหม่ใน 1 วินาที
+      setTimeout(prepare, 1000);
+    }
+  };
+  prepare();
+}, []);
 
   const toggleDropdown = (key: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -43,29 +50,32 @@ export default function ShoppingScreen() {
   };
 
   const updateQuantity = async (dbId: number, delta: number) => {
-    try {
-      const item: any = await db.getFirstAsync('SELECT quantity FROM items WHERE id = ?', [dbId]);
-      if (item) {
-        const newQty = item.quantity + delta;
-        if (newQty >= 1) {
-          await db.runAsync('UPDATE items SET quantity = ? WHERE id = ?', [newQty, dbId]);
-          await fetchData();
-        }
+  try {
+    const database = getDB(); // 🚩 ดึง Instance ล่าสุดมา
+    const item: any = await database.getFirstAsync('SELECT quantity FROM items WHERE id = ?', [dbId]);
+    
+    if (item) {
+      const newQty = item.quantity + delta;
+      if (newQty >= 1) {
+        await database.runAsync('UPDATE items SET quantity = ? WHERE id = ?', [newQty, dbId]);
+        await fetchData();
       }
-    } catch (error) {
-      console.error("Update Qty Error:", error);
     }
-  };
+  } catch (error) {
+    console.error("Update Qty Error:", error);
+  }
+};
 
   const handleSavePriceToDB = async (dbId: number, text: string) => {
-    try {
-      const unitPriceToday = parseFloat(text) || 0;
-      await db.runAsync('UPDATE items SET current_price = ? WHERE id = ?', [unitPriceToday, dbId]);
-      await fetchData(); 
-    } catch (error) {
-      console.error("Save Price Error:", error);
-    }
-  };
+  try {
+    const database = getDB(); // 🚩 ดึง Instance มา
+    const unitPriceToday = parseFloat(text) || 0;
+    await database.runAsync('UPDATE items SET current_price = ? WHERE id = ?', [unitPriceToday, dbId]);
+    await fetchData(); 
+  } catch (error) {
+    console.error("Save Price Error:", error);
+  }
+};
 
   const handleCheckItem = (dbId: number) => {
     if (pendingChecks[dbId]) {

@@ -12,7 +12,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db } from '../services/db';
+import { getDB } from '../services/db';
 
 interface Aisle {
     id: number; // id จำลองสำหรับ UI
@@ -33,12 +33,11 @@ export default function ManageAislesScreen() {
     // ✅ 1. ดึงชื่อโซนแบบไม่ซ้ำกัน
     const loadAisles = async () => {
   try {
-    // ใช้ TRIM(name) เพื่อตัดช่องว่างที่อาจจะติดมา และ GROUP BY เพื่อยุบชื่อที่เหมือนกัน
-    const result: any[] = await db.getAllAsync(
+    const database = getDB(); // 🚩 ดึง instance มาก่อน
+    const result: any[] = await database.getAllAsync(
       'SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name IS NOT NULL AND name != "" ORDER BY TRIM(name) ASC'
     );
     
-    // แปลงข้อมูลให้พร้อมใช้งานใน FlatList
     const formattedAisles = result.map((item, index) => ({
       id: index, 
       name: item.name
@@ -52,33 +51,35 @@ export default function ManageAislesScreen() {
 
     // ✅ 2. บันทึกการแก้ไขโดยอ้างอิงจาก "ชื่อเดิม"
     const handleSave = async () => {
-        if (!inputText.trim()) return;
-        try {
-            if (editingAisle) {
-                // อัปเดตทุกแถวที่มีชื่อเดิม ให้เปลี่ยนเป็นชื่อใหม่
-                await db.runAsync(
-                    'UPDATE aisles SET name = ? WHERE name = ?', 
-                    [inputText.trim(), editingAisle.name]
-                );
-                // อัปเดตชื่อในตาราง items ด้วยเพื่อให้สินค้ายังอยู่ที่เดิม
-                await db.runAsync(
-                    'UPDATE items SET aisle_id = (SELECT id FROM aisles WHERE name = ? LIMIT 1) WHERE aisle_id IN (SELECT id FROM aisles WHERE name = ?)',
-                    [inputText.trim(), editingAisle.name]
-                );
-            } else {
-                // เพิ่มโซนใหม่
-                await db.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [inputText.trim()]);
-            }
-
-            setInputText('');
-            setEditingAisle(null);
-            setModalVisible(false);
-            await loadAisles();
-        } catch (error) {
-            console.error(error);
-            Alert.alert("Error", "ไม่สามารถบันทึกข้อมูลได้");
+    if (!inputText.trim()) return;
+    try {
+        const database = getDB(); // 🚩 ดึง instance มาก่อน
+        
+        if (editingAisle) {
+            // อัปเดตทุกแถวที่มีชื่อเดิม
+            await database.runAsync(
+                'UPDATE aisles SET name = ? WHERE name = ?', 
+                [inputText.trim(), editingAisle.name]
+            );
+            // อัปเดตตาราง items ด้วย
+            await database.runAsync(
+                'UPDATE items SET aisle_id = (SELECT id FROM aisles WHERE name = ? LIMIT 1) WHERE aisle_id IN (SELECT id FROM aisles WHERE name = ?)',
+                [inputText.trim(), editingAisle.name]
+            );
+        } else {
+            // เพิ่มโซนใหม่
+            await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [inputText.trim()]);
         }
-    };
+
+        setInputText('');
+        setEditingAisle(null);
+        setModalVisible(false);
+        await loadAisles();
+    } catch (error) {
+        console.error(error);
+        Alert.alert("Error", "ไม่สามารถบันทึกข้อมูลได้");
+    }
+};
 
     // ✅ 3. ลบทุกแถวที่มีชื่อเดียวกัน
     const confirmDelete = (aisle: Aisle) => {
@@ -90,14 +91,16 @@ export default function ManageAislesScreen() {
                 { 
                     text: "ลบ", 
                     style: "destructive", 
-                    onPress: async () => {
-                        try {
-                            await db.runAsync('DELETE FROM aisles WHERE name = ?', [aisle.name]);
-                            await loadAisles();
-                        } catch (error) {
-                            console.error(error);
-                        }
-                    } 
+                    // 🚩 ในส่วน onPress ของ Alert.alert
+onPress: async () => {
+    try {
+        const database = getDB(); // 🚩 ดึง instance มา
+        await database.runAsync('DELETE FROM aisles WHERE name = ?', [aisle.name]);
+        await loadAisles();
+    } catch (error) {
+        console.error(error);
+    }
+}
                 }
             ]
         );

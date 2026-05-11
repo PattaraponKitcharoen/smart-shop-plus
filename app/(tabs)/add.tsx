@@ -16,7 +16,7 @@ import {
   UIManager,
   View
 } from 'react-native';
-import { db } from '../../services/db';
+import { getDB } from '../../services/db';
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 // เปิดใช้งาน Animation สำหรับ Android
@@ -134,37 +134,39 @@ useEffect(() => {
   };
 
   const loadStoresAndAisles = async () => {
-    try {
-      const stores: any[] = await db.getAllAsync('SELECT MIN(id) as id, name FROM stores GROUP BY name ORDER BY name ASC');
-      setDbStores(stores);
-      const aisles: any[] = await db.getAllAsync('SELECT MIN(id) as id, name FROM aisles GROUP BY name ORDER BY name ASC');
-      setDbAisles(aisles);
-    } catch (error) {
-      console.error("Load stores/aisles error", error);
-    }
-  };
+  try {
+    const database = getDB(); // 🚩 ดึง instance มาก่อน
+    const stores: any[] = await database.getAllAsync('SELECT MIN(id) as id, name FROM stores GROUP BY name ORDER BY name ASC');
+    setDbStores(stores);
+    const aisles: any[] = await database.getAllAsync('SELECT MIN(id) as id, name FROM aisles GROUP BY name ORDER BY name ASC');
+    setDbAisles(aisles);
+  } catch (error) {
+    console.error("Load stores/aisles error", error);
+  }
+};
 
-  const loadProductHistory = async () => {
-    try {
-      const result: any[] = await db.getAllAsync(`
-        SELECT 
-          TRIM(i.name) as name, 
-          TRIM(s.name) as lastStore, 
-          TRIM(a.name) as lastAisle, 
-          i.last_price as lastPrice
-        FROM items i
-        LEFT JOIN stores s ON i.store_id = s.id
-        LEFT JOIN aisles a ON i.aisle_id = a.id
-        WHERE i.id IN (
-          SELECT MAX(id) FROM items GROUP BY name, store_id 
-        )
-        ORDER BY i.name ASC, s.name ASC
-      `);
-      setHistory(result);
-    } catch (error) {
-      console.error("Load history error", error);
-    }
-  };
+const loadProductHistory = async () => {
+  try {
+    const database = getDB(); // 🚩 ดึง instance มาก่อน
+    const result: any[] = await database.getAllAsync(`
+      SELECT 
+        TRIM(i.name) as name, 
+        TRIM(s.name) as lastStore, 
+        TRIM(a.name) as lastAisle, 
+        i.last_price as lastPrice
+      FROM items i
+      LEFT JOIN stores s ON i.store_id = s.id
+      LEFT JOIN aisles a ON i.aisle_id = a.id
+      WHERE i.id IN (
+        SELECT MAX(id) FROM items GROUP BY name, store_id 
+      )
+      ORDER BY i.name ASC, s.name ASC
+    `);
+    setHistory(result);
+  } catch (error) {
+    console.error("Load history error", error);
+  }
+};
 
   const handleItemNameChange = (text: string) => {
     setItemName(text);
@@ -218,50 +220,60 @@ useEffect(() => {
   };
 
   const handleSave = async () => {
-    const finalStoreName = (storeName || storeSearch).trim();
-    const finalAisleName = (aisleName || aisleSearch).trim();
-    const finalItemName = itemName.trim();
+  const finalStoreName = (storeName || storeSearch).trim();
+  const finalAisleName = (aisleName || aisleSearch).trim();
+  const finalItemName = itemName.trim();
 
-    if (!finalItemName || !finalStoreName || !finalAisleName) {
-      Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบถ้วน');
-      return;
-    }
+  if (!finalItemName || !finalStoreName || !finalAisleName) {
+    Alert.alert('ข้อมูลไม่ครบ', 'กรุณากรอกข้อมูลให้ครบถ้วน');
+    return;
+  }
 
-    try {
-      await db.runAsync('INSERT OR IGNORE INTO stores (name) VALUES (?)', [finalStoreName]);
-      const storeRes: any = await db.getFirstAsync('SELECT id FROM stores WHERE name = ?', [finalStoreName]);
-      
-      await db.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [finalAisleName]);
-      const aisleRes: any = await db.getFirstAsync('SELECT id FROM aisles WHERE name = ?', [finalAisleName]);
+  try {
+    const database = getDB(); // 🚩 ดึง instance มาก่อนครั้งเดียว
 
-      const existingItem: any = await db.getFirstAsync(
-        `SELECT id FROM items WHERE name = ? AND store_id = ? AND aisle_id = ? AND is_active = 1`,
-        [finalItemName, storeRes.id, aisleRes.id]
+    // บันทึกร้านค้า
+    await database.runAsync('INSERT OR IGNORE INTO stores (name) VALUES (?)', [finalStoreName]);
+    const storeRes: any = await database.getFirstAsync('SELECT id FROM stores WHERE name = ?', [finalStoreName]);
+    
+    // บันทึกโซน
+    await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [finalAisleName]);
+    const aisleRes: any = await database.getFirstAsync('SELECT id FROM aisles WHERE name = ?', [finalAisleName]);
+
+    // เช็คสินค้าซ้ำ
+    const existingItem: any = await database.getFirstAsync(
+      `SELECT id FROM items WHERE name = ? AND store_id = ? AND aisle_id = ? AND is_active = 1`,
+      [finalItemName, storeRes.id, aisleRes.id]
+    );
+
+    const inputQty = parseInt(quantity) || 1;
+    const inputPrice = price ? parseFloat(price) : (lastPriceHint || 0);
+
+    if (existingItem) {
+      await database.runAsync(
+        `UPDATE items SET quantity = quantity + ?, last_price = ?, is_checked = 0 WHERE id = ?`,
+        [inputQty, inputPrice, existingItem.id]
       );
-
-      const inputQty = parseInt(quantity) || 1;
-      const inputPrice = price ? parseFloat(price) : (lastPriceHint || 0);
-
-      if (existingItem) {
-        await db.runAsync(
-          `UPDATE items SET quantity = quantity + ?, last_price = ?, is_checked = 0 WHERE id = ?`,
-          [inputQty, inputPrice, existingItem.id]
-        );
-      } else {
-        await db.runAsync(
-          `INSERT INTO items (store_id, aisle_id, name, last_price, current_price, quantity, is_checked, is_active) 
-           VALUES (?, ?, ?, ?, 0, ?, 0, 1)`, 
-          [storeRes.id, aisleRes.id, finalItemName, inputPrice, inputQty]
-        );
-      }
-
-      await fetchData(); 
-      resetForm();
-      Alert.alert('สำเร็จ', 'เพิ่มรายการเรียบร้อย');
-    } catch (error) {
-      Alert.alert('Error', 'ไม่สามารถบันทึกได้');
+    } else {
+      await database.runAsync(
+        `INSERT INTO items (store_id, aisle_id, name, last_price, current_price, quantity, is_checked, is_active) 
+         VALUES (?, ?, ?, ?, 0, ?, 0, 1)`, 
+        [storeRes.id, aisleRes.id, finalItemName, inputPrice, inputQty]
+      );
     }
-  };
+
+    await fetchData(); 
+    resetForm();
+    if (Platform.OS !== 'web') {
+      Alert.alert('สำเร็จ', 'เพิ่มรายการเรียบร้อย');
+    } else {
+      console.log('Saved successfully');
+    }
+  } catch (error) {
+    console.error(error);
+    Alert.alert('Error', 'ไม่สามารถบันทึกได้');
+  }
+};
 
   const filteredStores = dbStores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase()));
   const filteredAisles = dbAisles.filter(a => a.name.toLowerCase().includes(aisleSearch.toLowerCase()));

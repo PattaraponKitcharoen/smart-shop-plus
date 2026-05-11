@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db } from '../../services/db';
+import { getDB } from '../../services/db';
 import { useShoppingStore } from '../../store/useShoppingStore';
 
 export default function CartScreen() {
@@ -30,33 +30,45 @@ export default function CartScreen() {
   );
 
   const handleClearCart = async () => {
-    Alert.alert('ยืนยันการจ่ายเงิน', 'บันทึกราคาล่าสุดและเคลียร์ตะกร้าสำหรับรอบถัดไป', [
-      { text: 'ยกเลิก', style: 'cancel' },
-      { 
-        text: 'ยืนยัน', 
-        onPress: async () => {
-          try {
-            await db.runAsync(`
-              UPDATE items 
-              SET last_price = CASE 
-                                 WHEN current_price > 0 THEN current_price 
-                                 ELSE last_price 
-                               END, 
-                  is_checked = 0, 
-                  is_active = 0, 
-                  current_price = 0 
-              WHERE is_checked = 1
-            `);
-            await fetchCart(); 
-            await fetchData(); 
+  // บน Web ใช้ window.confirm แทน Alert.alert เพื่อความชัวร์ (หรือใช้ Alert.alert เดิมก็ได้)
+  const confirmText = 'บันทึกราคาล่าสุดและเคลียร์ตะกร้าสำหรับรอบถัดไป?';
+  
+  // โค้ดส่วน Alert.alert เดิม (ปรับเปลี่ยนตามความเหมาะสม)
+  Alert.alert('ยืนยันการจ่ายเงิน', confirmText, [
+    { text: 'ยกเลิก', style: 'cancel' },
+    { 
+      text: 'ยืนยัน', 
+      onPress: async () => {
+        try {
+          const database = getDB(); // 🚩 ดึง instance ของ db มา
+
+          await database.runAsync(`
+            UPDATE items 
+            SET last_price = CASE 
+                               WHEN current_price > 0 THEN current_price 
+                               ELSE last_price 
+                             END, 
+                is_checked = 0, 
+                is_active = 0, 
+                current_price = 0 
+            WHERE is_checked = 1
+          `);
+
+          await fetchCart(); 
+          await fetchData(); 
+
+          if (Platform.OS !== 'web') {
             Alert.alert("สำเร็จ", "บันทึกประวัติการซื้อเรียบร้อยแล้ว");
-          } catch (error) {
-            console.error("Clear cart error:", error);
+          } else {
+            alert("บันทึกประวัติการซื้อเรียบร้อยแล้ว"); // 🚩 ใช้ alert มาตรฐานบนเว็บ
           }
+        } catch (error) {
+          console.error("Clear cart error:", error);
         }
       }
-    ]);
-  };
+    }
+  ]);
+};
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

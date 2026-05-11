@@ -1,22 +1,25 @@
 import { create } from 'zustand';
-import { db } from '../services/db';
+// 🚩 เปลี่ยนการ Import
+import { getDB } from '../services/db';
 
 interface ShoppingState {
   stores: any[];
-  cartItems: any[]; // ✅ เพิ่ม State สำหรับเก็บของในตะกร้า
+  cartItems: any[];
   fetchData: () => Promise<void>;
-  fetchCart: () => Promise<void>; // ✅ เพิ่มฟังก์ชันดึงของในตะกร้า
+  fetchCart: () => Promise<void>;
   toggleItem: (itemId: number, isChecked: boolean) => Promise<void>;
 }
 
 export const useShoppingStore = create<ShoppingState>((set, get) => ({
   stores: [],
-  cartItems: [], // ค่าเริ่มต้นเป็นอาเรย์ว่าง
+  cartItems: [],
 
   // 🏠 ฟังก์ชันดึงข้อมูลหน้าหลัก (ของที่ยังไม่ได้ซื้อ)
   fetchData: async () => {
     try {
-      const storesData: any[] = await db.getAllAsync(`
+      const database = getDB(); // 🚩 เรียกใช้ getDB() เพื่อดึง instance ล่าสุด
+      
+      const storesData: any[] = await database.getAllAsync(`
         SELECT DISTINCT s.id, s.name 
         FROM stores s
         JOIN items i ON s.id = i.store_id
@@ -26,7 +29,7 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
 
       const result = [];
       for (const store of storesData) {
-        const aislesData: any[] = await db.getAllAsync(`
+        const aislesData: any[] = await database.getAllAsync(`
           SELECT DISTINCT a.id, a.name
           FROM aisles a
           JOIN items i ON a.id = i.aisle_id
@@ -36,7 +39,7 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
 
         const aisles = [];
         for (const aisle of aislesData) {
-          const items: any[] = await db.getAllAsync(`
+          const items: any[] = await database.getAllAsync(`
             SELECT id as dbId, name, last_price as price, current_price as currentPrice, quantity
             FROM items
             WHERE store_id = ? AND aisle_id = ? AND is_checked = 0 AND is_active = 1
@@ -56,13 +59,14 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
     }
   },
 
-  // 🛒 ✅ ฟังก์ชันดึงข้อมูลหน้าตะกร้า (ของที่ติ๊กถูกแล้ว)
+  // 🛒 ฟังก์ชันดึงข้อมูลหน้าตะกร้า
   fetchCart: async () => {
     try {
-      const result: any[] = await db.getAllAsync(
+      const database = getDB(); // 🚩 เรียกใช้ getDB()
+      const result: any[] = await database.getAllAsync(
         'SELECT id, name, last_price, current_price, quantity FROM items WHERE is_checked = 1'
       );
-      set({ cartItems: result }); // อัปเดต State cartItems ทันที
+      set({ cartItems: result });
     } catch (error) {
       console.error("Fetch Cart Error:", error);
     }
@@ -71,14 +75,15 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
   // 🔄 ฟังก์ชันสลับสถานะการติ๊กสินค้า
   toggleItem: async (itemId: number, isChecked: boolean) => {
     try {
-      // 1. อัปเดตในฐานข้อมูล
-      await db.runAsync('UPDATE items SET is_checked = ? WHERE id = ?', [isChecked ? 1 : 0, itemId]);
+      const database = getDB(); // 🚩 เรียกใช้ getDB()
       
-      // 2. รีเฟรชข้อมูลหน้าปัจจุบัน (หน้าหลัก) ทันที
+      // 1. อัปเดตในฐานข้อมูล
+      await database.runAsync('UPDATE items SET is_checked = ? WHERE id = ?', [isChecked ? 1 : 0, itemId]);
+      
+      // 2. รีเฟรชข้อมูลหน้าปัจจุบัน
       await get().fetchData(); 
 
-      // 3. ✅ สั่งรีเฟรชหน้าตะกร้าออโต้หลังจากผ่านไป 3 วินาที
-      // แม้ผู้ใช้จะเปิดหน้าตะกร้าค้างไว้ ข้อมูลจะเด้งขึ้นมาเอง
+      // 3. รีเฟรชหน้าตะกร้าออโต้
       setTimeout(async () => {
         await get().fetchCart(); 
         console.log("Auto-refreshed Cart Data!");

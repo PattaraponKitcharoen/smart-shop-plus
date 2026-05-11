@@ -14,7 +14,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db } from '../services/db';
+import { getDB } from '../services/db';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -26,32 +26,32 @@ export default function ManageItemsScreen() {
     const [openStores, setOpenStores] = useState<Record<number, boolean>>({});
 
     const fetchAllInventory = async () => {
-        try {
-            const stores: any[] = await db.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
-            
-            const fullData = await Promise.all(stores.map(async (store) => {
-                // ✅ ใช้ GROUP BY name เพื่อเอาชื่อที่ไม่ซ้ำ และ MAX(id) เพื่อเอาตัวล่าสุด
-                const items: any[] = await db.getAllAsync(
-                    `SELECT items.*, aisles.name as aisle_name 
-                     FROM items 
-                     LEFT JOIN aisles ON items.aisle_id = aisles.id 
-                     WHERE items.id IN (
-                        SELECT MAX(id) 
-                        FROM items 
-                        WHERE store_id = ? 
-                        GROUP BY name
-                     )
-                     ORDER BY items.name ASC`,
-                    [store.id]
-                );
-                return { ...store, items };
-            }));
+    try {
+        const database = getDB(); // 🚩 ดึง instance มาก่อน
+        const stores: any[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
+        
+        const fullData = await Promise.all(stores.map(async (store) => {
+            const items: any[] = await database.getAllAsync(
+                `SELECT items.*, aisles.name as aisle_name 
+                 FROM items 
+                 LEFT JOIN aisles ON items.aisle_id = aisles.id 
+                 WHERE items.id IN (
+                    SELECT MAX(id) 
+                    FROM items 
+                    WHERE store_id = ? 
+                    GROUP BY name
+                 )
+                 ORDER BY items.name ASC`,
+                [store.id]
+            );
+            return { ...store, items };
+        }));
 
-            setStoresData(fullData.filter(s => s.items.length > 0));
-        } catch (error) {
-            console.error("Fetch Inventory Error:", error);
-        }
-    };
+        setStoresData(fullData.filter(s => s.items.length > 0));
+    } catch (error) {
+        console.error("Fetch Inventory Error:", error);
+    }
+};
 
     useEffect(() => {
         fetchAllInventory();
@@ -63,37 +63,42 @@ export default function ManageItemsScreen() {
     };
 
     const handleUpdatePrice = async (itemId: number, newPrice: string) => {
-        const price = parseFloat(newPrice) || 0;
-        try {
-            // อัปเดตราคาล่าสุด
-            await db.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, itemId]);
-        } catch (error) {
-            Alert.alert("Error", "ไม่สามารถอัปเดตราคาได้");
-        }
-    };
+    const price = parseFloat(newPrice) || 0;
+    try {
+        const database = getDB(); // 🚩 ดึง instance มา
+        await database.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, itemId]);
+    } catch (error) {
+        console.error(error);
+        Alert.alert("Error", "ไม่สามารถอัปเดตราคาได้");
+    }
+};
 
     const handleDeleteItem = (itemId: number, itemName: string) => {
-        Alert.alert(
-            "ลบรายการนี้",
-            `ต้องการลบ "${itemName}" ออกจากระบบใช่หรือไม่? (การลบจะลบทุกประวัติของชื่อนี้ในร้านนี้)`,
-            [
-                { text: "ยกเลิก", style: "cancel" },
-                { 
-                    text: "ลบ", 
-                    style: "destructive", 
-                    onPress: async () => {
-                        // ดึงข้อมูลเพื่อหาชื่อและร้านค้าก่อนลบ
-                        const item: any = await db.getFirstAsync('SELECT name, store_id FROM items WHERE id = ?', [itemId]);
+    Alert.alert(
+        "ลบรายการนี้",
+        `ต้องการลบ "${itemName}" ออกจากระบบใช่หรือไม่?`,
+        [
+            { text: "ยกเลิก", style: "cancel" },
+            { 
+                text: "ลบ", 
+                style: "destructive", 
+                onPress: async () => {
+                    try {
+                        const database = getDB(); // 🚩 ดึง instance มา
+                        // หาข้อมูลเพื่อหาชื่อและร้านค้าก่อนลบ
+                        const item: any = await database.getFirstAsync('SELECT name, store_id FROM items WHERE id = ?', [itemId]);
                         if (item) {
-                            // ลบทุกอย่างที่ชื่อเหมือนกันในร้านเดียวกัน เพื่อให้หายไปจริงๆ
-                            await db.runAsync('DELETE FROM items WHERE name = ? AND store_id = ?', [item.name, item.store_id]);
+                            await database.runAsync('DELETE FROM items WHERE name = ? AND store_id = ?', [item.name, item.store_id]);
                         }
                         fetchAllInventory();
-                    } 
-                }
-            ]
-        );
-    };
+                    } catch (error) {
+                        console.error(error);
+                    }
+                } 
+            }
+        ]
+    );
+};
 
     return (
         <SafeAreaView style={styles.container}>
@@ -137,7 +142,7 @@ export default function ManageItemsScreen() {
                                                     style={styles.priceInput}
                                                     keyboardType="decimal-pad"
                                                     defaultValue={item.last_price.toString()}
-                                                    onBlur={(e) => handleUpdatePrice(item.id, e.nativeEvent.text)}
+                                                    onBlur={(e: any) => handleUpdatePrice(item.id, e.nativeEvent.text)}
                                                 />
                                             </View>
                                             <TouchableOpacity 
