@@ -213,7 +213,6 @@ export default function AddItemScreen() {
   };
 
   const handleSave = async () => {
-    if (!isDbReady) return;
     const finalStoreName = (storeName || storeSearch).trim();
     const finalAisleName = (aisleName || aisleSearch).trim();
     const finalItemName = itemName.trim();
@@ -225,30 +224,50 @@ export default function AddItemScreen() {
 
     try {
       const database = getDB();
+
+      // 1. จัดการร้านค้า (Stores)
       await database.runAsync('INSERT OR IGNORE INTO stores (name) VALUES (?)', [finalStoreName]);
       const storeRes: any = await database.getFirstAsync('SELECT id FROM stores WHERE name = ?', [finalStoreName]);
+      
+      // 2. จัดการโซน (Aisles) - 🚩 ปรับตรงนี้ให้ชัวร์ขึ้น
       await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [finalAisleName]);
       const aisleRes: any = await database.getFirstAsync('SELECT id FROM aisles WHERE name = ?', [finalAisleName]);
+
+      if (!storeRes || !aisleRes) {
+        throw new Error("Failed to get Store or Aisle ID");
+      }
+
+      const inputQty = parseInt(quantity) || 1;
+      const inputPrice = price ? parseFloat(price) : (lastPriceHint || 0);
+
+      // 3. ตรวจสอบสินค้าเดิม (รวมถึงเช็ค aisle_id ด้วย)
       const existingItem: any = await database.getFirstAsync(
         `SELECT id FROM items WHERE name = ? AND store_id = ? AND aisle_id = ? AND is_active = 1`,
         [finalItemName, storeRes.id, aisleRes.id]
       );
 
-      const inputQty = parseInt(quantity) || 1;
-      const inputPrice = price ? parseFloat(price) : (lastPriceHint || 0);
-
       if (existingItem) {
-        await database.runAsync(`UPDATE items SET quantity = quantity + ?, last_price = ?, is_checked = 0 WHERE id = ?`, [inputQty, inputPrice, existingItem.id]);
+        // อัปเดตรายการเดิม
+        await database.runAsync(
+          `UPDATE items SET quantity = quantity + ?, last_price = ?, is_checked = 0 WHERE id = ?`,
+          [inputQty, inputPrice, existingItem.id]
+        );
       } else {
-        await database.runAsync(`INSERT INTO items (store_id, aisle_id, name, last_price, current_price, quantity, is_checked, is_active) VALUES (?, ?, ?, ?, 0, ?, 0, 1)`, [storeRes.id, aisleRes.id, finalItemName, inputPrice, inputQty]
+        // เพิ่มรายการใหม่ - 🚩 มั่นใจว่าส่ง aisleRes.id เข้าไปในคอลัมน์ที่ 2
+        await database.runAsync(
+          `INSERT INTO items (store_id, aisle_id, name, last_price, current_price, quantity, is_checked, is_active) 
+           VALUES (?, ?, ?, ?, 0, ?, 0, 1)`, 
+          [storeRes.id, aisleRes.id, finalItemName, inputPrice, inputQty]
         );
       }
 
       await fetchData(); 
       resetForm();
       if (Platform.OS !== 'web') Alert.alert('สำเร็จ', 'เพิ่มรายการเรียบร้อย');
+      else console.log("✅ Saved with Aisle ID:", aisleRes.id);
+      
     } catch (error) {
-      console.error(error);
+      console.error("❌ Save Error:", error);
       Alert.alert('Error', 'ไม่สามารถบันทึกได้');
     }
   };
