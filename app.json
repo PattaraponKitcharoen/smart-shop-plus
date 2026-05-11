@@ -6,7 +6,7 @@
     "primaryColor": "#10b981",
     "backgroundColor": "#F5F5F5",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -26,9 +26,12 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "display": "standalone",
+      "backgroundColor": "#F3F4F6",
+      "themeColor": "#10b981",
+      "description": "smart-shop-plus"
     },
     "plugins": [
       "expo-router",
