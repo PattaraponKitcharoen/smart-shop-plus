@@ -9,7 +9,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,8 +19,13 @@ export default function PriceCalculatorScreen() {
   const [price2, setPrice2] = useState('');
   const [qty2, setQty2] = useState('');
 
-  const unitPrice1 = (parseFloat(price1) && parseFloat(qty1)) ? parseFloat(price1) / parseFloat(qty1) : 0;
-  const unitPrice2 = (parseFloat(price2) && parseFloat(qty2)) ? parseFloat(price2) / parseFloat(qty2) : 0;
+  const p1 = parseFloat(price1) || 0;
+  const q1 = parseFloat(qty1) || 0;
+  const p2 = parseFloat(price2) || 0;
+  const q2 = parseFloat(qty2) || 0;
+
+  const unitPrice1 = (p1 > 0 && q1 > 0) ? p1 / q1 : 0;
+  const unitPrice2 = (p2 > 0 && q2 > 0) ? p2 / q2 : 0;
 
   const getComparison = () => {
     if (unitPrice1 === 0 || unitPrice2 === 0) return null;
@@ -38,126 +42,139 @@ export default function PriceCalculatorScreen() {
   const reset = () => {
     setPrice1(''); setQty1('');
     setPrice2(''); setQty2('');
-    Keyboard.dismiss();
+    if (Platform.OS !== 'web') Keyboard.dismiss();
   };
+
+  // แยก Wrapper ออกมาเพื่อให้เว็บรันได้เสถียรขึ้น
+  const Wrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-            
-            <View style={styles.header}>
-              <Text style={styles.dateText}></Text>
-              <Text style={styles.title}>เครื่องคิดเลขคุ้มค่า</Text>
-              <Text style={styles.subtitle}>กรอกราคาเพื่อหาตัวเลือกที่ประหยัดที่สุด</Text>
-            </View>
+      <Wrapper 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>เครื่องคิดเลขคุ้มค่า</Text>
+            <Text style={styles.subtitle}>กรอกราคาเพื่อหาตัวเลือกที่ประหยัดที่สุด</Text>
+          </View>
 
-            <View style={styles.comparisonGrid}>
-              {/* แบบที่ 1 */}
-              <View style={[styles.card, result?.winner === 1 && styles.winnerCard]}>
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.cardTitle, result?.winner === 1 && styles.winnerText]}>แบบที่ 1</Text>
-                  {result?.winner === 1 && <FontAwesome5 name="medal" size={18} color="#10b981" />}
-                </View>
-                
-                <View style={styles.inputBox}>
-                  <Text style={styles.label}>ราคาทั้งหมด</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    keyboardType="decimal-pad"
-                    value={price1}
-                    onChangeText={setPrice1}
-                  />
-                </View>
-                
-                <View style={styles.inputBox}>
-                  <Text style={styles.label}>ปริมาณ/จำนวน</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    keyboardType="decimal-pad"
-                    value={qty1}
-                    onChangeText={setQty1}
-                  />
-                </View>
-
-                <View style={[styles.unitPriceBox, result?.winner === 1 && styles.winnerUnitBox]}>
-                  <Text style={styles.unitPriceLabel}>เฉลี่ยต่อหน่วย</Text>
-                  <Text style={styles.unitPriceValue}>฿{unitPrice1.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
-                </View>
+          <View style={styles.comparisonGrid}>
+            {/* แบบที่ 1 */}
+            <View style={[styles.card, result?.winner === 1 && styles.winnerCard]}>
+              <View style={styles.cardHeader}>
+                <Text style={[styles.cardTitle, result?.winner === 1 && styles.winnerText]}>แบบที่ 1</Text>
+                {result?.winner === 1 && <FontAwesome5 name="medal" size={18} color="#10b981" />}
+              </View>
+              
+              <View style={styles.inputBox}>
+                <Text style={styles.label}>ราคาทั้งหมด</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                  value={price1}
+                  onChangeText={setPrice1}
+                />
+              </View>
+              
+              <View style={styles.inputBox}>
+                <Text style={styles.label}>ปริมาณ/จำนวน</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                  value={qty1}
+                  onChangeText={setQty1}
+                />
               </View>
 
-              {/* แบบที่ 2 */}
-              <View style={[styles.card, result?.winner === 2 && styles.winnerCard]}>
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.cardTitle, result?.winner === 2 && styles.winnerText]}>แบบที่ 2</Text>
-                  {result?.winner === 2 && <FontAwesome5 name="medal" size={18} color="#10b981" />}
-                </View>
-                
-                <View style={styles.inputBox}>
-                  <Text style={styles.label}>ราคาทั้งหมด</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    keyboardType="decimal-pad"
-                    value={price2}
-                    onChangeText={setPrice2}
-                  />
-                </View>
-                
-                <View style={styles.inputBox}>
-                  <Text style={styles.label}>ปริมาณ/จำนวน</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    keyboardType="decimal-pad"
-                    value={qty2}
-                    onChangeText={setQty2}
-                  />
-                </View>
-
-                <View style={[styles.unitPriceBox, result?.winner === 2 && styles.winnerUnitBox]}>
-                  <Text style={styles.unitPriceLabel}>เฉลี่ยต่อหน่วย</Text>
-                  <Text style={styles.unitPriceValue}>฿{unitPrice2.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</Text>
-                </View>
+              <View style={[styles.unitPriceBox, result?.winner === 1 && styles.winnerUnitBox]}>
+                <Text style={styles.unitPriceLabel}>เฉลี่ยต่อหน่วย</Text>
+                <Text style={styles.unitPriceValue}>
+                  ฿{unitPrice1.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                </Text>
               </View>
             </View>
 
-            {/* ผลลัพธ์สรุป */}
-            {result && result.winner !== 0 && (
-              <View style={styles.resultBanner}>
-                <View style={styles.iconCircle}>
-                  <FontAwesome5 name="grin-stars" size={24} color="#10b981" />
-                </View>
-                <View style={styles.resultTextContainer}>
-                  <Text style={styles.resultTextMain}>แบบที่ {result.winner} คุ้มกว่าเห็นๆ!</Text>
-                  <Text style={styles.resultTextSub}>
-                    ประหยัดไปได้หน่วยละ ฿{result.diff.toFixed(2)} ({result.percent.toFixed(1)}%)
-                  </Text>
-                </View>
+            {/* แบบที่ 2 */}
+            <View style={[styles.card, result?.winner === 2 && styles.winnerCard]}>
+              <View style={styles.cardHeader}>
+                <Text style={[styles.cardTitle, result?.winner === 2 && styles.winnerText]}>แบบที่ 2</Text>
+                {result?.winner === 2 && <FontAwesome5 name="medal" size={18} color="#10b981" />}
               </View>
-            )}
-
-            {result?.winner === 0 && unitPrice1 > 0 && (
-              <View style={[styles.resultBanner, { backgroundColor: '#6b7280' }]}>
-                <FontAwesome5 name="equals" size={20} color="#fff" />
-                <View style={styles.resultTextContainer}>
-                  <Text style={styles.resultTextMain}>ราคาเท่ากันเป๊ะ!</Text>
-                  <Text style={styles.resultTextSub}>เลือกแบบไหนก็ได้ตามใจชอบเลย</Text>
-                </View>
+              
+              <View style={styles.inputBox}>
+                <Text style={styles.label}>ราคาทั้งหมด</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                  value={price2}
+                  onChangeText={setPrice2}
+                />
               </View>
-            )}
+              
+              <View style={styles.inputBox}>
+                <Text style={styles.label}>ปริมาณ/จำนวน</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="decimal-pad"
+                  value={qty2}
+                  onChangeText={setQty2}
+                />
+              </View>
 
-            <TouchableOpacity style={styles.resetButton} onPress={reset}>
-              <FontAwesome5 name="redo" size={14} color="#ef4444" style={{marginRight: 8}} />
-              <Text style={styles.resetButtonText}>ล้างข้อมูลทั้งหมด</Text>
-            </TouchableOpacity>
+              <View style={[styles.unitPriceBox, result?.winner === 2 && styles.winnerUnitBox]}>
+                <Text style={styles.unitPriceLabel}>เฉลี่ยต่อหน่วย</Text>
+                <Text style={styles.unitPriceValue}>
+                  ฿{unitPrice2.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                </Text>
+              </View>
+            </View>
+          </View>
 
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
+          {/* ผลลัพธ์สรุป */}
+          {result && result.winner !== 0 && (
+            <View style={styles.resultBanner}>
+              <View style={styles.iconCircle}>
+                <FontAwesome5 name="grin-stars" size={24} color="#10b981" />
+              </View>
+              <View style={styles.resultTextContainer}>
+                <Text style={styles.resultTextMain}>แบบที่ {result.winner} คุ้มกว่าเห็นๆ!</Text>
+                <Text style={styles.resultTextSub}>
+                  ประหยัดไปได้หน่วยละ ฿{result.diff.toFixed(2)} ({result.percent.toFixed(1)}%)
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {result?.winner === 0 && unitPrice1 > 0 && (
+            <View style={[styles.resultBanner, { backgroundColor: '#6b7280' }]}>
+              <FontAwesome5 name="equals" size={20} color="#fff" />
+              <View style={styles.resultTextContainer}>
+                <Text style={styles.resultTextMain}>ราคาเท่ากันเป๊ะ!</Text>
+                <Text style={styles.resultTextSub}>เลือกแบบไหนก็ได้ตามใจชอบเลย</Text>
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.resetButton} onPress={reset}>
+            <FontAwesome5 name="redo" size={14} color="#ef4444" style={{marginRight: 8}} />
+            <Text style={styles.resetButtonText}>ล้างข้อมูลทั้งหมด</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </Wrapper>
     </SafeAreaView>
   );
 }
@@ -166,7 +183,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
   scrollContainer: { paddingHorizontal: 20, paddingBottom: 40 },
   header: { paddingVertical: 10, marginBottom: 10, marginTop: 20 },
-  dateText: { fontSize: 12, color: '#10b981', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 10 },
   title: { fontSize: 34, fontWeight: '900', color: '#1f2937', letterSpacing: -1.2 },
   subtitle: { fontSize: 15, color: '#6b7280', marginTop: 4, fontWeight: '500' },
   
@@ -198,7 +214,12 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: '800',
     borderWidth: 1,
-    borderColor: '#F3F4F6'
+    borderColor: '#F3F4F6',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      }
+    })
   },
   
   unitPriceBox: { 
