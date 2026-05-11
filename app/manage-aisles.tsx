@@ -15,19 +15,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDB, initDatabase } from '../services/db';
 
-interface Aisle {
-  id: number; 
-  name: string; 
-}
-
 export default function ManageAislesScreen() {
   const router = useRouter();
-  const [aisles, setAisles] = useState<Aisle[]>([]);
+  const [aisles, setAisles] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingAisle, setEditingAisle] = useState<Aisle | null>(null);
+  const [editingAisle, setEditingAisle] = useState<any | null>(null);
   const [inputText, setInputText] = useState('');
   const [isDbReady, setIsDbReady] = useState(false);
 
+  // 🚩 ลอก Logic การ Init มาจากหน้า Manage Item
   useEffect(() => {
     const prepare = async () => {
       try {
@@ -45,44 +41,41 @@ export default function ManageAislesScreen() {
     try {
       const database = getDB();
       
-      // 🚩 ท่าเดียวกับ Manage Item: ดึงชื่อโซนจาก items ที่มีอยู่จริงมาโชว์
+      // 🚩 ใช้ Query เดียวกับหน้า Manage Item ที่ JOIN ตาราง items กับ aisles
+      // วิธีนี้จะดึง "โซนที่มีสินค้าผูกอยู่" ออกมาโชว์แน่นอน
       const result: any[] = await database.getAllAsync(`
-        SELECT DISTINCT TRIM(a.name) as name 
-        FROM items i
-        JOIN aisles a ON i.aisle_id = a.id
-        WHERE a.name IS NOT NULL AND TRIM(a.name) != ""
+        SELECT DISTINCT a.id, a.name 
+        FROM aisles a
+        INNER JOIN items i ON a.id = i.aisle_id
+        WHERE a.name IS NOT NULL AND a.name != ""
         ORDER BY a.name ASC
       `);
 
-      // 💡 สำรอง: ถ้าข้างบนไม่ขึ้น (เช่น เพิ่งลบสินค้าไปหมด) ให้ดึงจากตารางโซนตรงๆ
-      let dataToShow = result;
+      // 💡 ถ้า Query แรกไม่เจอ (กรณีแอดโซนทิ้งไว้แต่ยังไม่มีสินค้า) ให้ดึงจากตาราง aisles ตรงๆ
+      let dataToSet = result;
       if (result.length === 0) {
         const fallback: any[] = await database.getAllAsync(
-          'SELECT DISTINCT TRIM(name) as name FROM aisles WHERE name != ""'
+          'SELECT id, name FROM aisles WHERE name IS NOT NULL AND name != "" ORDER BY name ASC'
         );
-        dataToShow = fallback;
+        dataToSet = fallback;
       }
       
-      const formatted = dataToShow.map((item, index) => ({
-        id: index, 
-        name: item.name
-      }));
-      
-      setAisles(formatted);
+      setAisles(dataToSet);
+      console.log("Aisles Loaded:", dataToSet);
     } catch (error) {
       console.error("Load Error:", error);
     }
   };
 
   const handleSave = async () => {
-    if (!inputText.trim() || !isDbReady) return;
+    if (!inputText.trim()) return;
     try {
       const database = getDB();
       if (editingAisle) {
-        // แก้ไขชื่อในตารางแม่ (aisles)
+        // แก้ไขชื่อในตาราง aisles
         await database.runAsync(
-          'UPDATE aisles SET name = ? WHERE name = ?', 
-          [inputText.trim(), editingAisle.name]
+          'UPDATE aisles SET name = ? WHERE id = ?', 
+          [inputText.trim(), editingAisle.id]
         );
       } else {
         // เพิ่มใหม่
@@ -91,7 +84,7 @@ export default function ManageAislesScreen() {
       setInputText('');
       setEditingAisle(null);
       setModalVisible(false);
-      await loadAisles();
+      await loadAisles(); // รีโหลดข้อมูลทันที
     } catch (error) {
       console.error(error);
       if (Platform.OS === 'web') alert("บันทึกไม่ได้");
@@ -99,17 +92,17 @@ export default function ManageAislesScreen() {
     }
   };
 
-  const confirmDelete = (aisle: Aisle) => {
+  const confirmDelete = (aisle: any) => {
     const performDelete = async () => {
       try {
         const database = getDB();
-        await database.runAsync('DELETE FROM aisles WHERE name = ?', [aisle.name]);
+        await database.runAsync('DELETE FROM aisles WHERE id = ?', [aisle.id]);
         await loadAisles();
       } catch (error) { console.error(error); }
     };
 
     if (Platform.OS === 'web') {
-      if (window.confirm(`ลบโซน "${aisle.name}"?`)) performDelete();
+      if (window.confirm(`ยืนยันลบโซน "${aisle.name}"?`)) performDelete();
     } else {
       Alert.alert("ลบ", `ลบ "${aisle.name}"?`, [
         { text: "ยกเลิก", style: "cancel" },
@@ -122,7 +115,7 @@ export default function ManageAislesScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.customHeader}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <FontAwesome5 name="chevron-left" size={20} color="#1f2937" />
+          <FontAwesome5 name="arrow-left" size={20} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>จัดการโซนสินค้า</Text>
         <View style={{ width: 40 }} />
@@ -130,7 +123,7 @@ export default function ManageAislesScreen() {
 
       <FlatList
         data={aisles}
-        keyExtractor={(item) => item.name} 
+        keyExtractor={(item, index) => item.id?.toString() || index.toString()} 
         renderItem={({ item }) => (
           <View style={styles.listItem}>
             <View style={styles.info}>
@@ -140,7 +133,10 @@ export default function ManageAislesScreen() {
               <Text style={styles.aisleName}>{item.name}</Text>
             </View>
             <View style={styles.actions}>
-              <TouchableOpacity onPress={() => { setEditingAisle(item); setInputText(item.name); setModalVisible(true); }} style={styles.iconBtn}>
+              <TouchableOpacity 
+                onPress={() => { setEditingAisle(item); setInputText(item.name); setModalVisible(true); }} 
+                style={styles.iconBtn}
+              >
                 <FontAwesome5 name="edit" size={16} color="#6b7280" />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => confirmDelete(item)} style={styles.iconBtn}>
@@ -150,14 +146,21 @@ export default function ManageAislesScreen() {
           </View>
         )}
         contentContainerStyle={styles.listPadding}
-        ListEmptyComponent={<Text style={styles.emptyText}>{isDbReady ? "ไม่พบโซนสินค้า" : "กำลังโหลด..."}</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {isDbReady ? "ไม่พบข้อมูลโซนสินค้า" : "กำลังโหลด..."}
+          </Text>
+        }
       />
 
-      <TouchableOpacity style={styles.fab} onPress={() => { setEditingAisle(null); setInputText(''); setModalVisible(true); }}>
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => { setEditingAisle(null); setInputText(''); setModalVisible(true); }}
+      >
         <FontAwesome5 name="plus" size={20} color="#fff" />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="fade" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{editingAisle ? 'แก้ไข' : 'เพิ่ม'}โซน</Text>
@@ -165,14 +168,18 @@ export default function ManageAislesScreen() {
               style={styles.input}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="ชื่อโซน..."
+              placeholder="ระบุชื่อโซน..."
               placeholderTextColor="#9ca3af"
               autoFocus
               {...Platform.select({ web: { outlineStyle: 'none' } })}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}><Text>ยกเลิก</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.btnSave} onPress={handleSave}><Text style={{color:'#fff'}}>บันทึก</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+                <Text style={styles.btnTextSave}>บันทึก</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -201,5 +208,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20, color: '#1f2937' },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
   btnCancel: { flex: 1, padding: 15, alignItems: 'center' },
-  btnSave: { flex: 1, backgroundColor: '#10b981', padding: 15, borderRadius: 12, alignItems: 'center' }
+  btnSave: { flex: 1, backgroundColor: '#10b981', padding: 15, borderRadius: 12, alignItems: 'center' },
+  btnTextCancel: { color: '#6b7280', fontWeight: '600' },
+  btnTextSave: { color: '#fff', fontWeight: 'bold' }
 });
