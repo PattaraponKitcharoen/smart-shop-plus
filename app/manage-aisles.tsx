@@ -37,25 +37,26 @@ export default function ManageAislesScreen() {
     prepare();
   }, []);
 
-  const loadAisles = async () => {
+  // 🚩 แก้ไขฟังก์ชัน loadAisles ให้คลีนที่สุด
+const loadAisles = async () => {
     try {
         const database = getDB();
         
-        // 🚩 เลิก JOIN items ครับ! เราจะดึงจากตาราง aisles ตรงๆ 
-        // เพื่อให้ "โซนที่เพิ่งเพิ่ม" หรือ "โซนที่ว่างเปล่า" ปรากฏตัวออกมา
-        const result: any[] = await database.getAllAsync(`
-            SELECT id, name 
-            FROM aisles 
-            WHERE name IS NOT NULL AND TRIM(name) != ""
-            ORDER BY name ASC
-        `);
+        // ใช้ Query แบบมาตรฐาน ไม่ต้องมี TRIM หรือ DISTINCT ที่ซับซ้อนในจังหวะนี้
+        // เพื่อเช็คก่อนว่าข้อมูลมาไหม
+        const result: any[] = await database.getAllAsync(
+            'SELECT id, name FROM aisles WHERE name IS NOT NULL ORDER BY name ASC'
+        );
+        
+        console.log("📊 Data from DB:", result);
 
-        console.log("📊 Data check - Aisles in DB:", result); // เช็คใน Console ดูครับว่ามาไหม
-
-        const formatted = result.map((item) => ({
-            id: item.id, 
-            name: item.name
-        }));
+        // กรองค่าว่างออกด้วย JavaScript แทน SQL เพื่อความปลอดภัย
+        const formatted = result
+            .filter(item => item.name && item.name.trim() !== "")
+            .map((item) => ({
+                id: item.id,
+                name: item.name.trim()
+            }));
         
         setAisles(formatted);
     } catch (error) {
