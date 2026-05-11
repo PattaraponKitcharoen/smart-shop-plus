@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-// 🚩 เปลี่ยนการ Import
 import { getDB } from '../services/db';
 
 interface ShoppingState {
@@ -14,55 +13,59 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
   stores: [],
   cartItems: [],
 
-  // 🏠 ฟังก์ชันดึงข้อมูลหน้าหลัก (ของที่ยังไม่ได้ซื้อ)
   fetchData: async () => {
     try {
-      const database = getDB(); // 🚩 เรียกใช้ getDB() เพื่อดึง instance ล่าสุด
+      const database = getDB();
       
-      const storesData: any[] = await database.getAllAsync(`
-        SELECT DISTINCT s.id, s.name 
-        FROM stores s
-        JOIN items i ON s.id = i.store_id
+      // ดึงข้อมูลแบบ JOIN ทั้ง 3 ตารางมาในรอบเดียว
+      const rawItems: any[] = await database.getAllAsync(`
+        SELECT 
+          i.id as dbId,
+          i.name as name,
+          i.last_price as price,
+          i.current_price as currentPrice,
+          i.quantity as quantity,
+          s.id as storeId,
+          s.name as storeName,
+          a.id as aisleId,
+          COALESCE(a.name, 'ทั่วไป') as aisleName
+        FROM items i
+        JOIN stores s ON i.store_id = s.id
+        LEFT JOIN aisles a ON i.aisle_id = a.id
         WHERE i.is_checked = 0 AND i.is_active = 1
-        ORDER BY s.name ASC
+        ORDER BY s.name ASC, a.name ASC, i.name ASC
       `);
 
-      const result = [];
-      for (const store of storesData) {
-        const aislesData: any[] = await database.getAllAsync(`
-          SELECT DISTINCT a.id, a.name
-          FROM aisles a
-          JOIN items i ON a.id = i.aisle_id
-          WHERE i.store_id = ? AND i.is_checked = 0 AND i.is_active = 1
-          ORDER BY a.name ASC
-        `, [store.id]);
-
-        const aisles = [];
-        for (const aisle of aislesData) {
-          const items: any[] = await database.getAllAsync(`
-            SELECT id as dbId, name, last_price as price, current_price as currentPrice, quantity
-            FROM items
-            WHERE store_id = ? AND aisle_id = ? AND is_checked = 0 AND is_active = 1
-          `, [store.id, aisle.id]);
-
-          if (items.length > 0) {
-            aisles.push({ ...aisle, items });
-          }
+      // จัดกลุ่มข้อมูล (Grouping) จากรายการแบนๆ ให้เป็นโครงสร้าง Store > Aisle > Items
+      const grouped = rawItems.reduce((acc: any[], item) => {
+        // หา Store เดิม
+        let store = acc.find(s => s.id === item.storeId);
+        if (!store) {
+          store = { id: item.storeId, name: item.storeName, aisles: [] };
+          acc.push(store);
         }
-        if (aisles.length > 0) {
-          result.push({ ...store, aisles });
+
+        // หา Aisle เดิมใน Store นั้น
+        let aisle = store.aisles.find((a: any) => a.name === item.aisleName);
+        if (!aisle) {
+          aisle = { id: item.aisleId, name: item.aisleName, items: [] };
+          store.aisles.push(aisle);
         }
-      }
-      set({ stores: result });
+
+        // เพิ่ม Item ลงไป
+        aisle.items.push(item);
+        return acc;
+      }, []);
+
+      set({ stores: grouped });
     } catch (error) {
       console.error("Fetch Data Error:", error);
     }
   },
 
-  // 🛒 ฟังก์ชันดึงข้อมูลหน้าตะกร้า
   fetchCart: async () => {
     try {
-      const database = getDB(); // 🚩 เรียกใช้ getDB()
+      const database = getDB();
       const result: any[] = await database.getAllAsync(
         'SELECT id, name, last_price, current_price, quantity FROM items WHERE is_checked = 1'
       );
@@ -72,23 +75,17 @@ export const useShoppingStore = create<ShoppingState>((set, get) => ({
     }
   },
 
-  // 🔄 ฟังก์ชันสลับสถานะการติ๊กสินค้า
   toggleItem: async (itemId: number, isChecked: boolean) => {
     try {
-      const database = getDB(); // 🚩 เรียกใช้ getDB()
-      
-      // 1. อัปเดตในฐานข้อมูล
+      const database = getDB();
       await database.runAsync('UPDATE items SET is_checked = ? WHERE id = ?', [isChecked ? 1 : 0, itemId]);
       
-      // 2. รีเฟรชข้อมูลหน้าปัจจุบัน
       await get().fetchData(); 
 
-      // 3. รีเฟรชหน้าตะกร้าออโต้
+      // ปรับเวลาเล็กน้อยเพื่อให้ Animation ในหน้า Index ทำงานเสร็จก่อนค่อยดึงตะกร้า
       setTimeout(async () => {
         await get().fetchCart(); 
-        console.log("Auto-refreshed Cart Data!");
-      }, 2010);
-
+      }, 2050);
     } catch (error) {
       console.error("Toggle Item Error:", error);
     }
