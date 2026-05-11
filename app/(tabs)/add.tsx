@@ -98,12 +98,14 @@ export default function AddItemScreen() {
   };
 
   const scrollToBottom = () => {
+    if (Platform.OS === 'web') return;
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 100);
   };
 
   const scrollToTop = () => {
+    if (Platform.OS === 'web') return;
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
@@ -218,7 +220,8 @@ export default function AddItemScreen() {
       if (existingItem) {
         await database.runAsync(`UPDATE items SET quantity = quantity + ?, last_price = ?, is_checked = 0 WHERE id = ?`, [inputQty, inputPrice, existingItem.id]);
       } else {
-        await database.runAsync(`INSERT INTO items (store_id, aisle_id, name, last_price, current_price, quantity, is_checked, is_active) VALUES (?, ?, ?, ?, 0, ?, 0, 1)`, [storeRes.id, aisleRes.id, finalItemName, inputPrice, inputQty]);
+        await database.runAsync(`INSERT INTO items (store_id, aisle_id, name, last_price, current_price, quantity, is_checked, is_active) VALUES (?, ?, ?, ?, 0, ?, 0, 1)`, [storeRes.id, aisleRes.id, finalItemName, inputPrice, inputQty]
+        );
       }
 
       await fetchData(); 
@@ -233,161 +236,184 @@ export default function AddItemScreen() {
   const filteredStores = dbStores.filter(s => s.name.toLowerCase().includes(storeSearch.toLowerCase()));
   const filteredAisles = dbAisles.filter(a => a.name.toLowerCase().includes(aisleSearch.toLowerCase()));
 
-  // 🚩 ปรับ Wrapper สำหรับ Web
-  const Wrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+  // ฟังก์ชันแสดงเนื้อหาฟอร์ม (แยกออกมาเพื่อเรียกใช้ซ้ำ)
+  const renderFormContent = () => (
+    <>
+      <View style={styles.header}>
+        <Text style={styles.title}>เพิ่มรายการใหม่</Text>
+        <Text style={styles.subtitle}>เพิ่มของที่คุณต้องการช้อปวันนี้</Text>
+      </View>
+
+      <View style={styles.formCard}>
+        {/* 1. ชื่อสินค้า */}
+        <View style={[styles.inputGroup, { zIndex: 3000 }]}>
+          <Text style={styles.label}>ชื่อสินค้า</Text>
+          <View style={[styles.inputWrapper, activeField === 'item' && styles.inputWrapperActive]}>
+            <FontAwesome5 name="shopping-basket" size={16} color={activeField === 'item' ? "#10b981" : "#9ca3af"} style={styles.icon} />
+            <TextInput 
+              style={styles.input} 
+              placeholder="ระบุชื่อสินค้า..." 
+              placeholderTextColor="#9ca3af"
+              value={itemName} 
+              onChangeText={handleItemNameChange}
+              onFocus={() => setActiveField('item')}
+            />
+            {itemName.length > 0 && (
+              <TouchableOpacity onPress={() => clearInput('item')}>
+                <FontAwesome5 name="times-circle" size={18} color="#d1d5db" />
+              </TouchableOpacity>
+            )}
+          </View>
+          {showHistory && (
+            <View style={styles.dropdown}>
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: 200 }}>
+                {filteredHistory.map((item, index) => (
+                  <TouchableOpacity key={index} style={styles.dropdownItem} onPress={() => selectFromHistory(item)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dropdownText}>{item.name}</Text>
+                      <Text style={styles.dropdownSubText}>{item.lastStore} • {item.lastAisle}</Text>
+                    </View>
+                    <Text style={styles.historyPrice}>฿{item.lastPrice.toFixed(0)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        {/* 2. ร้านค้า */}
+        <View style={[styles.inputGroup, { zIndex: 2000 }]}>
+          <Text style={styles.label}>ร้านค้า</Text>
+          <View style={[styles.inputWrapper, activeField === 'store' && styles.inputWrapperActive]}>
+            <FontAwesome5 name="store" size={14} color={activeField === 'store' ? "#10b981" : "#9ca3af"} style={styles.icon} />
+            <TextInput 
+              style={styles.input} 
+              placeholder="พิมพ์ชื่อร้านค้า..." 
+              placeholderTextColor="#9ca3af"
+              value={storeName || storeSearch} 
+              onChangeText={(text) => { setStoreSearch(text); setStoreName(''); setShowStoreList(true); }}
+              onFocus={() => { setShowStoreList(true); setActiveField('store'); scrollToBottom(); }}
+            />
+          </View>
+          {showStoreList && !storeName && filteredStores.length > 0 && (
+            <View style={styles.dropdown}>
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: 150 }}>
+                {filteredStores.map(s => (
+                  <TouchableOpacity key={s.id} style={styles.dropdownItem} onPress={() => { setStoreName(s.name); setShowStoreList(false); Keyboard.dismiss(); }}>
+                    <Text style={styles.dropdownText}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        {/* 3. โซนสินค้า */}
+        <View style={[styles.inputGroup, { zIndex: 1000 }]}>
+          <Text style={styles.label}>โซนสินค้า / หมวดหมู่</Text>
+          <View style={[styles.inputWrapper, activeField === 'aisle' && styles.inputWrapperActive]}>
+            <FontAwesome5 name="layer-group" size={14} color={activeField === 'aisle' ? "#10b981" : "#9ca3af"} style={styles.icon} />
+            <TextInput 
+              style={styles.input} 
+              placeholder="ระบุโซน..." 
+              placeholderTextColor="#9ca3af"
+              value={aisleName || aisleSearch} 
+              onChangeText={(text) => { setAisleSearch(text); setAisleName(''); setShowAisleList(true); }}
+              onFocus={() => { setShowAisleList(true); setActiveField('aisle'); scrollToBottom(); }}
+            />
+          </View>
+          {showAisleList && !aisleName && filteredAisles.length > 0 && (
+            <View style={styles.dropdown}>
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: 150 }}>
+                {filteredAisles.map(a => (
+                  <TouchableOpacity key={a.id} style={styles.dropdownItem} onPress={() => { setAisleName(a.name); setShowAisleList(false); Keyboard.dismiss(); }}>
+                    <Text style={styles.dropdownText}>{a.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        {/* 4. ราคา & จำนวน */}
+        <View style={styles.row}>
+          <View style={[styles.inputGroup, { flex: 1.5, marginRight: 8 }]}>
+            <Text style={styles.label}>ราคา/หน่วย</Text>
+            <View style={[styles.inputWrapper, activeField === 'price' && styles.inputWrapperActive]}>
+              <Text style={styles.currency}>฿</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder={lastPriceHint ? `${lastPriceHint}` : "0.00"} 
+                placeholderTextColor="#9ca3af"
+                keyboardType="numeric" 
+                value={price} 
+                onChangeText={setPrice}
+                onFocus={() => { setActiveField('price'); scrollToBottom(); }}
+              />
+            </View>
+          </View>
+
+          <View style={[styles.inputGroup, { flex: 1 }]}>
+            <Text style={styles.label}>จำนวน</Text>
+            <View style={styles.qtyContainer}>
+              <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(-1)}>
+                <FontAwesome5 name="minus" size={10} color="#10b981" />
+              </TouchableOpacity>
+              <TextInput 
+                style={styles.qtyInput} 
+                keyboardType="number-pad" 
+                value={quantity} 
+                onChangeText={setQuantity}
+                onFocus={() => { setActiveField('qty'); scrollToBottom(); }}
+              />
+              <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(1)}>
+                <FontAwesome5 name="plus" size={10} color="#10b981" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.saveButton, !itemName.trim() && styles.disabledButton]} 
+          onPress={handleSave} 
+          disabled={!itemName.trim()}
+        >
+          <FontAwesome5 name="plus" size={16} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.saveButtonText}>เพิ่มลงในรายการซื้อ</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 
   return (
     <View style={styles.container}>
-      <Wrapper behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); closeDropdowns(); scrollToTop(); }}>
-          <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <View style={styles.header}>
-              <Text style={styles.title}>เพิ่มรายการใหม่</Text>
-              <Text style={styles.subtitle}>เพิ่มของที่คุณต้องการช้อปวันนี้</Text>
-            </View>
-
-            <View style={styles.formCard}>
-              {/* 1. ชื่อสินค้า */}
-              <View style={[styles.inputGroup, { zIndex: 3000 }]}>
-                <Text style={styles.label}>ชื่อสินค้า</Text>
-                <View style={[styles.inputWrapper, activeField === 'item' && styles.inputWrapperActive]}>
-                  <FontAwesome5 name="shopping-basket" size={16} color={activeField === 'item' ? "#10b981" : "#9ca3af"} style={styles.icon} />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="ระบุชื่อสินค้า..." 
-                    placeholderTextColor="#9ca3af"
-                    value={itemName} 
-                    onChangeText={handleItemNameChange}
-                    onFocus={() => setActiveField('item')}
-                  />
-                  {itemName.length > 0 && (
-                    <TouchableOpacity onPress={() => clearInput('item')}>
-                      <FontAwesome5 name="times-circle" size={18} color="#d1d5db" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {showHistory && (
-                  <View style={styles.dropdown}>
-                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: 200 }}>
-                      {filteredHistory.map((item, index) => (
-                        <TouchableOpacity key={index} style={styles.dropdownItem} onPress={() => selectFromHistory(item)}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.dropdownText}>{item.name}</Text>
-                            <Text style={styles.dropdownSubText}>{item.lastStore} • {item.lastAisle}</Text>
-                          </View>
-                          <Text style={styles.historyPrice}>฿{item.lastPrice.toFixed(0)}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
-
-              {/* 2. ร้านค้า */}
-              <View style={[styles.inputGroup, { zIndex: 2000 }]}>
-                <Text style={styles.label}>ร้านค้า</Text>
-                <View style={[styles.inputWrapper, activeField === 'store' && styles.inputWrapperActive]}>
-                  <FontAwesome5 name="store" size={14} color={activeField === 'store' ? "#10b981" : "#9ca3af"} style={styles.icon} />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="พิมพ์ชื่อร้านค้า..." 
-                    placeholderTextColor="#9ca3af"
-                    value={storeName || storeSearch} 
-                    onChangeText={(text) => { setStoreSearch(text); setStoreName(''); setShowStoreList(true); }}
-                    onFocus={() => { setShowStoreList(true); setActiveField('store'); scrollToBottom(); }}
-                  />
-                </View>
-                {showStoreList && !storeName && filteredStores.length > 0 && (
-                  <View style={styles.dropdown}>
-                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: 150 }}>
-                      {filteredStores.map(s => (
-                        <TouchableOpacity key={s.id} style={styles.dropdownItem} onPress={() => { setStoreName(s.name); setShowStoreList(false); Keyboard.dismiss(); }}>
-                          <Text style={styles.dropdownText}>{s.name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
-
-              {/* 3. โซนสินค้า */}
-              <View style={[styles.inputGroup, { zIndex: 1000 }]}>
-                <Text style={styles.label}>โซนสินค้า / หมวดหมู่</Text>
-                <View style={[styles.inputWrapper, activeField === 'aisle' && styles.inputWrapperActive]}>
-                  <FontAwesome5 name="layer-group" size={14} color={activeField === 'aisle' ? "#10b981" : "#9ca3af"} style={styles.icon} />
-                  <TextInput 
-                    style={styles.input} 
-                    placeholder="ระบุโซน..." 
-                    placeholderTextColor="#9ca3af"
-                    value={aisleName || aisleSearch} 
-                    onChangeText={(text) => { setAisleSearch(text); setAisleName(''); setShowAisleList(true); }}
-                    onFocus={() => { setShowAisleList(true); setActiveField('aisle'); scrollToBottom(); }}
-                  />
-                </View>
-                {showAisleList && !aisleName && filteredAisles.length > 0 && (
-                  <View style={styles.dropdown}>
-                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="always" style={{ maxHeight: 150 }}>
-                      {filteredAisles.map(a => (
-                        <TouchableOpacity key={a.id} style={styles.dropdownItem} onPress={() => { setAisleName(a.name); setShowAisleList(false); Keyboard.dismiss(); }}>
-                          <Text style={styles.dropdownText}>{a.name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
-
-              {/* 4. ราคา & จำนวน */}
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 1.5, marginRight: 8 }]}>
-                  <Text style={styles.label}>ราคา/หน่วย</Text>
-                  <View style={[styles.inputWrapper, activeField === 'price' && styles.inputWrapperActive]}>
-                    <Text style={styles.currency}>฿</Text>
-                    <TextInput 
-                      style={styles.input} 
-                      placeholder={lastPriceHint ? `${lastPriceHint}` : "0.00"} 
-                      placeholderTextColor="#9ca3af"
-                      keyboardType="numeric" 
-                      value={price} 
-                      onChangeText={setPrice}
-                      onFocus={() => { setActiveField('price'); scrollToBottom(); }}
-                    />
-                  </View>
-                </View>
-
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>จำนวน</Text>
-                  <View style={styles.qtyContainer}>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(-1)}>
-                      <FontAwesome5 name="minus" size={10} color="#10b981" />
-                    </TouchableOpacity>
-                    <TextInput 
-                      style={styles.qtyInput} 
-                      keyboardType="number-pad" 
-                      value={quantity} 
-                      onChangeText={setQuantity}
-                      onFocus={() => { setActiveField('qty'); scrollToBottom(); }}
-                    />
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(1)}>
-                      <FontAwesome5 name="plus" size={10} color="#10b981" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity 
-                style={[styles.saveButton, !itemName.trim() && styles.disabledButton]} 
-                onPress={handleSave} 
-                disabled={!itemName.trim()}
-              >
-                <FontAwesome5 name="plus" size={16} color="#fff" style={{ marginRight: 10 }} />
-                <Text style={styles.saveButtonText}>เพิ่มลงในรายการซื้อ</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={{ height: 100 }} /> 
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </Wrapper>
+      {Platform.OS === 'web' ? (
+        // บน Web: ไม่ใช้ TouchableWithoutFeedback และ KeyboardAvoidingView
+        <ScrollView 
+          ref={scrollRef} 
+          contentContainerStyle={styles.scrollContainer} 
+          keyboardShouldPersistTaps="handled" 
+          showsVerticalScrollIndicator={false}
+        >
+          {renderFormContent()}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      ) : (
+        // บน Mobile: ใช้ตามปกติ
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); closeDropdowns(); scrollToTop(); }}>
+            <ScrollView 
+              ref={scrollRef} 
+              contentContainerStyle={styles.scrollContainer} 
+              keyboardShouldPersistTaps="handled" 
+              showsVerticalScrollIndicator={false}
+            >
+              {renderFormContent()}
+              <View style={{ height: 100 }} />
+            </ScrollView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      )}
     </View>
   );
 }
