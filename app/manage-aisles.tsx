@@ -2,15 +2,19 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  FlatList, // 🚩 เพิ่ม
+  Keyboard // 🚩 เพิ่ม
+  ,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity, // 🚩 เพิ่ม
+  TouchableWithoutFeedback,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDB, initDatabase } from '../services/db';
@@ -23,7 +27,6 @@ export default function ManageAislesScreen() {
   const [inputText, setInputText] = useState('');
   const [isDbReady, setIsDbReady] = useState(false);
 
-  // 🚩 ลอก Logic การ Init มาจากหน้า Manage Item
   useEffect(() => {
     const prepare = async () => {
       try {
@@ -37,20 +40,11 @@ export default function ManageAislesScreen() {
     prepare();
   }, []);
 
-  // 🚩 แก้ไขฟังก์ชัน loadAisles ให้คลีนที่สุด
-const loadAisles = async () => {
+  const loadAisles = async () => {
     try {
         const database = getDB();
+        const result: any[] = await database.getAllAsync('SELECT id, name FROM aisles');
         
-        // 🚩 ใช้ Query ที่สั้นและปลอดภัยที่สุด เพื่อเลี่ยง Error code 1
-        // เราจะไม่ใช้ WHERE ใน SQL แต่จะมากรองใน JS แทน
-        const result: any[] = await database.getAllAsync(
-            'SELECT id, name FROM aisles'
-        );
-        
-        console.log("📊 Raw Data from DB:", result);
-
-        // 🚩 กรองข้อมูลด้วย JavaScript (เสถียรกว่าบน Web Browser)
         const formatted = result
             .filter(item => 
                 item && 
@@ -62,37 +56,28 @@ const loadAisles = async () => {
                 id: item.id,
                 name: item.name.trim()
             }))
-            // เรียงลำดับ ก-ฮ ด้วย JS
             .sort((a, b) => a.name.localeCompare(b.name, 'th'));
         
         setAisles(formatted);
-        console.log("✅ Formatted Data:", formatted);
-
     } catch (error) {
         console.error("❌ Load Error:", error);
-        // ถ้ายังพังอีก ให้เซตเป็นอาเรย์ว่างป้องกันแอปค้าง
         setAisles([]);
     }
-};
+  };
 
   const handleSave = async () => {
     if (!inputText.trim()) return;
     try {
       const database = getDB();
       if (editingAisle) {
-        // แก้ไขชื่อในตาราง aisles
-        await database.runAsync(
-          'UPDATE aisles SET name = ? WHERE id = ?', 
-          [inputText.trim(), editingAisle.id]
-        );
+        await database.runAsync('UPDATE aisles SET name = ? WHERE id = ?', [inputText.trim(), editingAisle.id]);
       } else {
-        // เพิ่มใหม่
         await database.runAsync('INSERT OR IGNORE INTO aisles (name) VALUES (?)', [inputText.trim()]);
       }
       setInputText('');
       setEditingAisle(null);
       setModalVisible(false);
-      await loadAisles(); // รีโหลดข้อมูลทันที
+      await loadAisles();
     } catch (error) {
       console.error(error);
       if (Platform.OS === 'web') alert("บันทึกไม่ได้");
@@ -169,28 +154,34 @@ const loadAisles = async () => {
       </TouchableOpacity>
 
       <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingAisle ? 'แก้ไข' : 'เพิ่ม'}โซน</Text>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="ระบุชื่อโซน..."
-              placeholderTextColor="#9ca3af"
-              autoFocus
-              {...Platform.select({ web: { outlineStyle: 'none' } })}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
-                <Text style={styles.btnTextSave}>บันทึก</Text>
-              </TouchableOpacity>
+        {/* 🚩 ใช้ KeyboardAvoidingView เพื่อดันเนื้อหาขึ้นหนีแป้นพิมพ์ */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{editingAisle ? 'แก้ไข' : 'เพิ่ม'}โซน</Text>
+              <TextInput
+                style={styles.input}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="ระบุชื่อโซน..."
+                placeholderTextColor="#9ca3af"
+                autoFocus={Platform.OS !== 'web'} // 🚩 autoFocus เฉพาะมือถือ
+                {...Platform.select({ web: { outlineStyle: 'none' } })}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+                  <Text style={styles.btnTextSave}>บันทึก</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -211,7 +202,7 @@ const styles = StyleSheet.create({
   emptyText: { textAlign: 'center', marginTop: 40, color: '#9ca3af' },
   fab: { position: 'absolute', bottom: 30, right: 20, backgroundColor: '#10b981', width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%' },
+  modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%', maxWidth: 400 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   input: { backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20, color: '#1f2937' },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },

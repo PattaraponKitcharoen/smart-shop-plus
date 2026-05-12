@@ -2,7 +2,10 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
+    Alert, // 🚩 เพิ่ม
+    Keyboard // 🚩 เพิ่ม
+    ,
+    KeyboardAvoidingView,
     LayoutAnimation,
     Modal,
     Platform,
@@ -10,7 +13,8 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    TouchableOpacity,
+    TouchableOpacity, // 🚩 เพิ่ม
+    TouchableWithoutFeedback,
     UIManager,
     View
 } from 'react-native';
@@ -27,7 +31,6 @@ export default function ManageItemsScreen() {
     const [openStores, setOpenStores] = useState<Record<number, boolean>>({});
     const [isReady, setIsReady] = useState(false);
 
-    // สำหรับ Modal แก้ไขราคา
     const [modalVisible, setModalVisible] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [tempPrice, setTempPrice] = useState('');
@@ -87,7 +90,7 @@ export default function ManageItemsScreen() {
             const database = getDB();
             await database.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, editingItem.id]);
             setModalVisible(false);
-            await fetchAllInventory(); // รีโหลดข้อมูลหลังบันทึก
+            await fetchAllInventory();
         } catch (error) {
             console.error(error);
             if (Platform.OS !== 'web') Alert.alert("Error", "ไม่สามารถอัปเดตราคาได้");
@@ -106,7 +109,6 @@ export default function ManageItemsScreen() {
         };
 
         const message = `ต้องการลบ "${itemName}" ออกจากระบบใช่หรือไม่?`;
-
         if (Platform.OS === 'web') {
             if (window.confirm(message)) deleteAction();
         } else {
@@ -158,7 +160,6 @@ export default function ManageItemsScreen() {
                                             </View>
 
                                             <View style={styles.actionArea}>
-                                                {/* เปลี่ยนจาก TextInput เป็นปุ่มกดเพื่อเปิด Modal */}
                                                 <TouchableOpacity 
                                                     style={styles.priceContainer} 
                                                     onPress={() => openPriceModal(item)}
@@ -185,37 +186,42 @@ export default function ManageItemsScreen() {
                 )}
             </ScrollView>
 
-            {/* Modal สำหรับแก้ไขราคา */}
             <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>แก้ไขราคาสินค้า</Text>
-                        <Text style={styles.modalSubTitle}>{editingItem?.name}</Text>
-                        
-                        <View style={styles.modalInputWrapper}>
-                            <Text style={styles.modalCurrency}>฿</Text>
-                            <TextInput
-                                style={styles.modalInput}
-                                value={tempPrice}
-                                onChangeText={setTempPrice}
-                                placeholder="0.00"
-                                placeholderTextColor="#d1d5db" // 🚩 สีเทาจางตามที่ต้องการ
-                                keyboardType="decimal-pad"
-                                autoFocus
-                                {...Platform.select({ web: { outlineStyle: 'none' } })}
-                            />
-                        </View>
+                {/* 🚩 ใช้ KeyboardAvoidingView เพื่อดัน Modal ขึ้นหนีแป้นพิมพ์ */}
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                    style={styles.modalOverlay}
+                >
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>แก้ไขราคาสินค้า</Text>
+                            <Text style={styles.modalSubTitle}>{editingItem?.name}</Text>
+                            
+                            <View style={styles.modalInputWrapper}>
+                                <Text style={styles.modalCurrency}>฿</Text>
+                                <TextInput
+                                    style={styles.modalInput}
+                                    value={tempPrice}
+                                    onChangeText={setTempPrice}
+                                    placeholder="0.00"
+                                    placeholderTextColor="#d1d5db"
+                                    keyboardType="decimal-pad"
+                                    autoFocus={Platform.OS !== 'web'} // 🚩 autoFocus เฉพาะมือถือ
+                                    {...Platform.select({ web: { outlineStyle: 'none' } })}
+                                />
+                            </View>
 
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-                                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.btnSave} onPress={handleSavePrice}>
-                                <Text style={styles.btnTextSave}>บันทึก</Text>
-                            </TouchableOpacity>
+                            <View style={styles.modalButtons}>
+                                <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                                    <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.btnSave} onPress={handleSavePrice}>
+                                    <Text style={styles.btnTextSave}>บันทึก</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
-                </View>
+                    </TouchableWithoutFeedback>
+                </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
     );
@@ -255,7 +261,6 @@ const styles = StyleSheet.create({
     priceValueText: { fontSize: 14, fontWeight: 'bold', color: '#059669' },
     deleteBtn: { marginLeft: 15, padding: 5 },
 
-    // Modal Styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
     modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%', maxWidth: 400 },
     modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#111827' },

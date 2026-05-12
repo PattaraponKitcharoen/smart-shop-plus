@@ -3,17 +3,21 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  FlatList,
+  FlatList, // 🚩 เพิ่ม
+  Keyboard // 🚩 เพิ่ม
+  ,
+  KeyboardAvoidingView,
   Modal,
-  Platform, // 🚩 เพิ่ม Platform
+  Platform,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
+  TouchableOpacity, // 🚩 เพิ่ม
+  TouchableWithoutFeedback,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDB, initDatabase } from '../services/db'; // 🚩 เพิ่ม initDatabase
+import { getDB, initDatabase } from '../services/db';
 
 interface Store {
   id: number;
@@ -26,7 +30,7 @@ export default function ManageStoresScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [inputText, setInputText] = useState('');
-  const [isDbReady, setIsDbReady] = useState(false); // เช็คความพร้อม DB
+  const [isDbReady, setIsDbReady] = useState(false);
 
   useEffect(() => {
     const prepare = async () => {
@@ -44,7 +48,6 @@ export default function ManageStoresScreen() {
   const loadStores = async () => {
     try {
       const database = getDB();
-      // ดึงข้อมูลและกรองค่าว่างออกเพื่อความคลีน
       const result: Store[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
       setStores(result.filter(s => s.name && s.name.trim() !== ""));
     } catch (error) {
@@ -74,7 +77,6 @@ export default function ManageStoresScreen() {
 
   const confirmDelete = (store: Store) => {
     const msg = `คุณต้องการลบร้าน "${store.name}" ใช่หรือไม่?`;
-
     const performDelete = async () => {
       try {
         const database = getDB();
@@ -86,12 +88,8 @@ export default function ManageStoresScreen() {
     };
 
     if (Platform.OS === 'web') {
-      // 🚩 สำหรับ Web ใช้ window.confirm
-      if (window.confirm(msg)) {
-        performDelete();
-      }
+      if (window.confirm(msg)) performDelete();
     } else {
-      // สำหรับ Mobile ใช้ Alert.alert
       Alert.alert("ลบร้านค้า", msg, [
         { text: "ยกเลิก", style: "cancel" },
         { text: "ลบ", style: "destructive", onPress: performDelete }
@@ -146,29 +144,41 @@ export default function ManageStoresScreen() {
         <FontAwesome5 name="plus" size={20} color="#fff" />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingStore ? 'แก้ไขชื่อร้าน' : 'เพิ่มร้านใหม่'}</Text>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="พิมพ์ชื่อร้านที่นี่..."
-              placeholderTextColor="#9ca3af"
-              autoFocus
-              {...Platform.select({ web: { outlineStyle: 'none' } })}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
-                <Text style={styles.btnTextSave}>บันทึกข้อมูล</Text>
-              </TouchableOpacity>
+      <Modal 
+        visible={modalVisible} 
+        animationType="fade" 
+        transparent 
+        onRequestClose={() => setModalVisible(false)}
+      >
+        {/* 🚩 ใช้ KeyboardAvoidingView หุ้มด้านนอกสุดของเนื้อหา Modal */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.modalOverlay}
+        >
+          {/* 🚩 แตะที่ว่างเพื่อปิดคีย์บอร์ดหรือปิด Modal */}
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{editingStore ? 'แก้ไขชื่อร้าน' : 'เพิ่มร้านใหม่'}</Text>
+              <TextInput
+                style={styles.input}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="พิมพ์ชื่อร้านที่นี่..."
+                placeholderTextColor="#9ca3af"
+                autoFocus={Platform.OS !== 'web'} // 🚩 autoFocus เฉพาะบนมือถือ
+                {...Platform.select({ web: { outlineStyle: 'none' } })}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+                  <Text style={styles.btnTextSave}>บันทึกข้อมูล</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -198,8 +208,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981', width: 56, height: 56, borderRadius: 28,
     justifyContent: 'center', alignItems: 'center', elevation: 5,
   },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%' },
+  // 🚩 ปรับ modalOverlay ให้เป็นสัดส่วน
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  modalContent: { 
+    backgroundColor: '#fff', 
+    borderRadius: 24, 
+    padding: 24, 
+    width: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
   input: { 
     backgroundColor: '#F3F4F6', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20,

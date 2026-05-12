@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     width: 60, 
     height: 40, 
     textAlign: 'right', 
-    fontSize: 15, 
+    fontSize: 16, 
     fontWeight: 'bold', 
     color: '#111827' 
   },
