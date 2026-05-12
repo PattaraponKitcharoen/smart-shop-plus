@@ -6,6 +6,7 @@ import {
   FlatList, // 🚩 เพิ่ม
   Keyboard // 🚩 เพิ่ม
   ,
+
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -150,34 +151,36 @@ export default function ManageStoresScreen() {
         transparent 
         onRequestClose={() => setModalVisible(false)}
       >
-        {/* 🚩 ใช้ KeyboardAvoidingView หุ้มด้านนอกสุดของเนื้อหา Modal */}
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={styles.modalOverlay}
         >
-          {/* 🚩 แตะที่ว่างเพื่อปิดคีย์บอร์ดหรือปิด Modal */}
+          {/* 1. ส่วนที่เป็นฉากหลัง (แตะเพื่อปิดคีย์บอร์ด) */}
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{editingStore ? 'แก้ไขชื่อร้าน' : 'เพิ่มร้านใหม่'}</Text>
-              <TextInput
-                style={styles.input}
-                value={inputText}
-                onChangeText={setInputText}
-                placeholder="พิมพ์ชื่อร้านที่นี่..."
-                placeholderTextColor="#9ca3af"
-                autoFocus={Platform.OS !== 'web'} // 🚩 autoFocus เฉพาะบนมือถือ
-                {...Platform.select({ web: { outlineStyle: 'none' } })}
-              />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.btnTextCancel}>ยกเลิก</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
-                  <Text style={styles.btnTextSave}>บันทึกข้อมูล</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <View style={StyleSheet.absoluteFill} />
           </TouchableWithoutFeedback>
+
+          {/* 2. ส่วนที่เป็นกล่องเนื้อหา (แยกออกมาไม่ให้โดน Touchable คลุมทับ) */}
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editingStore ? 'แก้ไขชื่อร้าน' : 'เพิ่มร้านใหม่'}</Text>
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="พิมพ์ชื่อร้านที่นี่..."
+              placeholderTextColor="#9ca3af"
+              autoFocus={Platform.OS !== 'web'}
+              {...Platform.select({ web: { outlineStyle: 'none' } })}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+                <Text style={styles.btnTextSave}>บันทึกข้อมูล</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
