@@ -3,6 +3,8 @@
 
 Smart Shop Plus is a mobile application built with **React Native** designed to help users shop more efficiently. It doesn't just list items; it tracks historical prices, compares current costs, and organizes your shopping journey by store and aisle.
 
+**Link**: https://smart-shop-plus.vercel.app/
+
 ## ✨ Key Features
 *   🏬 **Multi-Store Support**: Organize your lists based on the specific supermarket or store you are visiting.
 *   📍 **Aisle-Based Organization**: Group items by aisle or category to minimize walking time and avoid backtracking.
