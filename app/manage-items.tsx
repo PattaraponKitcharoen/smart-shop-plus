@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
     Alert,
     LayoutAnimation,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -14,7 +15,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDB, initDatabase } from '../services/db'; // 🚩 เพิ่ม initDatabase
+import { getDB, initDatabase } from '../services/db';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -25,6 +26,11 @@ export default function ManageItemsScreen() {
     const [storesData, setStoresData] = useState<any[]>([]);
     const [openStores, setOpenStores] = useState<Record<number, boolean>>({});
     const [isReady, setIsReady] = useState(false);
+
+    // สำหรับ Modal แก้ไขราคา
+    const [modalVisible, setModalVisible] = useState(false);
+    const [editingItem, setEditingItem] = useState<any>(null);
+    const [tempPrice, setTempPrice] = useState('');
 
     const fetchAllInventory = async () => {
         try {
@@ -68,12 +74,20 @@ export default function ManageItemsScreen() {
         setOpenStores(prev => ({ ...prev, [storeId]: !prev[storeId] }));
     };
 
-    const handleUpdatePrice = async (itemId: number, newPrice: string) => {
-        const price = parseFloat(newPrice) || 0;
+    const openPriceModal = (item: any) => {
+        setEditingItem(item);
+        setTempPrice(item.last_price?.toString() || '');
+        setModalVisible(true);
+    };
+
+    const handleSavePrice = async () => {
+        if (!editingItem) return;
+        const price = parseFloat(tempPrice) || 0;
         try {
             const database = getDB();
-            await database.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, itemId]);
-            console.log("Price updated!");
+            await database.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, editingItem.id]);
+            setModalVisible(false);
+            await fetchAllInventory(); // รีโหลดข้อมูลหลังบันทึก
         } catch (error) {
             console.error(error);
             if (Platform.OS !== 'web') Alert.alert("Error", "ไม่สามารถอัปเดตราคาได้");
@@ -84,7 +98,6 @@ export default function ManageItemsScreen() {
         const deleteAction = async () => {
             try {
                 const database = getDB();
-                // 🚩 ลบแบบเจาะจงด้วย ID จะแม่นยำกว่า
                 await database.runAsync('DELETE FROM items WHERE id = ?', [itemId]);
                 await fetchAllInventory();
             } catch (error) {
@@ -95,9 +108,7 @@ export default function ManageItemsScreen() {
         const message = `ต้องการลบ "${itemName}" ออกจากระบบใช่หรือไม่?`;
 
         if (Platform.OS === 'web') {
-            if (window.confirm(message)) {
-                deleteAction();
-            }
+            if (window.confirm(message)) deleteAction();
         } else {
             Alert.alert("ลบรายการนี้", message, [
                 { text: "ยกเลิก", style: "cancel" },
@@ -147,16 +158,17 @@ export default function ManageItemsScreen() {
                                             </View>
 
                                             <View style={styles.actionArea}>
-                                                <View style={styles.priceContainer}>
+                                                {/* เปลี่ยนจาก TextInput เป็นปุ่มกดเพื่อเปิด Modal */}
+                                                <TouchableOpacity 
+                                                    style={styles.priceContainer} 
+                                                    onPress={() => openPriceModal(item)}
+                                                >
                                                     <Text style={styles.priceLabel}>฿</Text>
-                                                    <TextInput
-                                                        style={styles.priceInput}
-                                                        keyboardType="decimal-pad"
-                                                        defaultValue={item.last_price?.toString() || "0"}
-                                                        onBlur={(e: any) => handleUpdatePrice(item.id, e.nativeEvent.text)}
-                                                        {...Platform.select({ web: { outlineStyle: 'none' } })}
-                                                    />
-                                                </View>
+                                                    <Text style={styles.priceValueText}>
+                                                        {item.last_price?.toLocaleString() || "0"}
+                                                    </Text>
+                                                </TouchableOpacity>
+
                                                 <TouchableOpacity 
                                                     onPress={() => handleDeleteItem(item.id, item.name)}
                                                     style={styles.deleteBtn}
@@ -172,6 +184,39 @@ export default function ManageItemsScreen() {
                     ))
                 )}
             </ScrollView>
+
+            {/* Modal สำหรับแก้ไขราคา */}
+            <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>แก้ไขราคาสินค้า</Text>
+                        <Text style={styles.modalSubTitle}>{editingItem?.name}</Text>
+                        
+                        <View style={styles.modalInputWrapper}>
+                            <Text style={styles.modalCurrency}>฿</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                value={tempPrice}
+                                onChangeText={setTempPrice}
+                                placeholder="0.00"
+                                placeholderTextColor="#d1d5db" // 🚩 สีเทาจางตามที่ต้องการ
+                                keyboardType="decimal-pad"
+                                autoFocus
+                                {...Platform.select({ web: { outlineStyle: 'none' } })}
+                            />
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.btnSave} onPress={handleSavePrice}>
+                                <Text style={styles.btnTextSave}>บันทึก</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -196,8 +241,39 @@ const styles = StyleSheet.create({
     itemName: { fontSize: 15, fontWeight: '600', color: '#374151' },
     aisleText: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
     actionArea: { flexDirection: 'row', alignItems: 'center' },
-    priceContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 6, paddingHorizontal: 8, height: 32, borderWidth: 1, borderColor: '#E5E7EB' },
+    priceContainer: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#F3F4F6', 
+        borderRadius: 6, 
+        paddingHorizontal: 10, 
+        height: 32, 
+        borderWidth: 1, 
+        borderColor: '#E5E7EB' 
+    },
     priceLabel: { fontSize: 12, color: '#9ca3af', marginRight: 4 },
-    priceInput: { fontSize: 14, fontWeight: 'bold', color: '#059669', width: 55, textAlign: 'center', padding: 0 },
-    deleteBtn: { marginLeft: 15, padding: 5 }
+    priceValueText: { fontSize: 14, fontWeight: 'bold', color: '#059669' },
+    deleteBtn: { marginLeft: 15, padding: 5 },
+
+    // Modal Styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '85%', maxWidth: 400 },
+    modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#111827' },
+    modalSubTitle: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 20, marginTop: 4 },
+    modalInputWrapper: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#F3F4F6', 
+        borderRadius: 12, 
+        paddingHorizontal: 15, 
+        height: 54, 
+        marginBottom: 20 
+    },
+    modalCurrency: { fontSize: 18, fontWeight: 'bold', color: '#9ca3af', marginRight: 10 },
+    modalInput: { flex: 1, fontSize: 20, fontWeight: 'bold', color: '#059669' },
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+    btnCancel: { flex: 1, padding: 15, alignItems: 'center' },
+    btnSave: { flex: 1, backgroundColor: '#10b981', padding: 15, borderRadius: 12, alignItems: 'center' },
+    btnTextCancel: { color: '#6b7280', fontWeight: '600' },
+    btnTextSave: { color: '#fff', fontWeight: 'bold' }
 });

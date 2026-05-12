@@ -202,13 +202,15 @@ export default function ShoppingScreen() {
                               <View style={styles.priceInputWrapper}>
                                 <Text style={styles.currencyPrefix}>฿</Text>
                                 <TextInput 
-                                  style={[styles.priceInput, isPending && { opacity: 0.4 }]} 
-                                  placeholder="0.00"
-                                  keyboardType="decimal-pad"
-                                  editable={!isPending}
-                                  defaultValue={item.currentPrice > 0 ? item.currentPrice.toString() : ''}
-                                  onBlur={(e: any) => handleSavePriceToDB(item.dbId, e.nativeEvent.text)}
-                                />
+  style={[styles.priceInput, isPending && { opacity: 0.4 }]} 
+  placeholder="0.00"
+  placeholderTextColor="#d1d5db" 
+  keyboardType="decimal-pad"
+  editable={!isPending}
+  defaultValue={item.currentPrice > 0 ? item.currentPrice.toString() : ''}
+  onBlur={(e: any) => handleSavePriceToDB(item.dbId, e.nativeEvent.text)}
+  {...Platform.select({ web: { outlineStyle: 'none' } })}
+/>
                               </View>
                               {item.currentPrice > 0 && (
                                 <Text style={styles.totalHintText}>
