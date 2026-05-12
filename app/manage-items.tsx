@@ -14,7 +14,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getDB } from '../services/db';
+import { getDB, initDatabase } from '../services/db'; // 🚩 เพิ่ม initDatabase
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -24,37 +24,43 @@ export default function ManageItemsScreen() {
     const router = useRouter();
     const [storesData, setStoresData] = useState<any[]>([]);
     const [openStores, setOpenStores] = useState<Record<number, boolean>>({});
+    const [isReady, setIsReady] = useState(false);
 
     const fetchAllInventory = async () => {
-    try {
-        const database = getDB(); // 🚩 ดึง instance มาก่อน
-        const stores: any[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
-        
-        const fullData = await Promise.all(stores.map(async (store) => {
-            const items: any[] = await database.getAllAsync(
-                `SELECT items.*, aisles.name as aisle_name 
-                 FROM items 
-                 LEFT JOIN aisles ON items.aisle_id = aisles.id 
-                 WHERE items.id IN (
-                    SELECT MAX(id) 
-                    FROM items 
-                    WHERE store_id = ? 
-                    GROUP BY name
-                 )
-                 ORDER BY items.name ASC`,
-                [store.id]
-            );
-            return { ...store, items };
-        }));
+        try {
+            const database = getDB();
+            const stores: any[] = await database.getAllAsync('SELECT * FROM stores ORDER BY name ASC');
+            
+            const fullData = await Promise.all(stores.map(async (store) => {
+                const items: any[] = await database.getAllAsync(
+                    `SELECT items.*, aisles.name as aisle_name 
+                     FROM items 
+                     LEFT JOIN aisles ON items.aisle_id = aisles.id 
+                     WHERE items.id IN (
+                        SELECT MAX(id) 
+                        FROM items 
+                        WHERE store_id = ? 
+                        GROUP BY name
+                     )
+                     ORDER BY items.name ASC`,
+                    [store.id]
+                );
+                return { ...store, items };
+            }));
 
-        setStoresData(fullData.filter(s => s.items.length > 0));
-    } catch (error) {
-        console.error("Fetch Inventory Error:", error);
-    }
-};
+            setStoresData(fullData.filter(s => s.items.length > 0));
+        } catch (error) {
+            console.error("Fetch Inventory Error:", error);
+        }
+    };
 
     useEffect(() => {
-        fetchAllInventory();
+        const setup = async () => {
+            await initDatabase();
+            setIsReady(true);
+            await fetchAllInventory();
+        };
+        setup();
     }, []);
 
     const toggleStore = (storeId: number) => {
@@ -63,42 +69,42 @@ export default function ManageItemsScreen() {
     };
 
     const handleUpdatePrice = async (itemId: number, newPrice: string) => {
-    const price = parseFloat(newPrice) || 0;
-    try {
-        const database = getDB(); // 🚩 ดึง instance มา
-        await database.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, itemId]);
-    } catch (error) {
-        console.error(error);
-        Alert.alert("Error", "ไม่สามารถอัปเดตราคาได้");
-    }
-};
+        const price = parseFloat(newPrice) || 0;
+        try {
+            const database = getDB();
+            await database.runAsync('UPDATE items SET last_price = ? WHERE id = ?', [price, itemId]);
+            console.log("Price updated!");
+        } catch (error) {
+            console.error(error);
+            if (Platform.OS !== 'web') Alert.alert("Error", "ไม่สามารถอัปเดตราคาได้");
+        }
+    };
 
     const handleDeleteItem = (itemId: number, itemName: string) => {
-    Alert.alert(
-        "ลบรายการนี้",
-        `ต้องการลบ "${itemName}" ออกจากระบบใช่หรือไม่?`,
-        [
-            { text: "ยกเลิก", style: "cancel" },
-            { 
-                text: "ลบ", 
-                style: "destructive", 
-                onPress: async () => {
-                    try {
-                        const database = getDB(); // 🚩 ดึง instance มา
-                        // หาข้อมูลเพื่อหาชื่อและร้านค้าก่อนลบ
-                        const item: any = await database.getFirstAsync('SELECT name, store_id FROM items WHERE id = ?', [itemId]);
-                        if (item) {
-                            await database.runAsync('DELETE FROM items WHERE name = ? AND store_id = ?', [item.name, item.store_id]);
-                        }
-                        fetchAllInventory();
-                    } catch (error) {
-                        console.error(error);
-                    }
-                } 
+        const deleteAction = async () => {
+            try {
+                const database = getDB();
+                // 🚩 ลบแบบเจาะจงด้วย ID จะแม่นยำกว่า
+                await database.runAsync('DELETE FROM items WHERE id = ?', [itemId]);
+                await fetchAllInventory();
+            } catch (error) {
+                console.error("Delete Error:", error);
             }
-        ]
-    );
-};
+        };
+
+        const message = `ต้องการลบ "${itemName}" ออกจากระบบใช่หรือไม่?`;
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(message)) {
+                deleteAction();
+            }
+        } else {
+            Alert.alert("ลบรายการนี้", message, [
+                { text: "ยกเลิก", style: "cancel" },
+                { text: "ลบ", style: "destructive", onPress: deleteAction }
+            ]);
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -115,49 +121,56 @@ export default function ManageItemsScreen() {
             </View>
 
             <ScrollView style={styles.content}>
-                {storesData.map((store) => (
-                    <View key={store.id} style={styles.storeCard}>
-                        <TouchableOpacity style={styles.storeHeader} onPress={() => toggleStore(store.id)}>
-                            <View style={styles.storeTitleRow}>
-                                <FontAwesome5 name="store" size={14} color="#059669" style={{ marginRight: 10 }} />
-                                <Text style={styles.storeName}>{store.name}</Text>
-                                <Text style={styles.itemCount}>{store.items.length} ชนิด</Text>
-                            </View>
-                            <FontAwesome5 name={openStores[store.id] ? "chevron-up" : "chevron-down"} size={12} color="#9ca3af" />
-                        </TouchableOpacity>
+                {!isReady ? (
+                    <Text style={{ textAlign: 'center', marginTop: 20 }}>กำลังโหลดฐานข้อมูล...</Text>
+                ) : storesData.length === 0 ? (
+                    <Text style={{ textAlign: 'center', marginTop: 20, color: '#9ca3af' }}>ยังไม่มีข้อมูลสินค้าในคลัง</Text>
+                ) : (
+                    storesData.map((store) => (
+                        <View key={store.id} style={styles.storeCard}>
+                            <TouchableOpacity style={styles.storeHeader} onPress={() => toggleStore(store.id)}>
+                                <View style={styles.storeTitleRow}>
+                                    <FontAwesome5 name="store" size={14} color="#059669" style={{ marginRight: 10 }} />
+                                    <Text style={styles.storeName}>{store.name}</Text>
+                                    <Text style={styles.itemCount}>{store.items.length} ชนิด</Text>
+                                </View>
+                                <FontAwesome5 name={openStores[store.id] ? "chevron-up" : "chevron-down"} size={12} color="#9ca3af" />
+                            </TouchableOpacity>
 
-                        {openStores[store.id] && (
-                            <View style={styles.itemsList}>
-                                {store.items.map((item: any) => (
-                                    <View key={item.id} style={styles.itemRow}>
-                                        <View style={styles.itemInfo}>
-                                            <Text style={styles.itemName}>{item.name}</Text>
-                                            <Text style={styles.aisleText}>โซน: {item.aisle_name || 'ทั่วไป'}</Text>
-                                        </View>
-
-                                        <View style={styles.actionArea}>
-                                            <View style={styles.priceContainer}>
-                                                <Text style={styles.priceLabel}>฿</Text>
-                                                <TextInput
-                                                    style={styles.priceInput}
-                                                    keyboardType="decimal-pad"
-                                                    defaultValue={item.last_price.toString()}
-                                                    onBlur={(e: any) => handleUpdatePrice(item.id, e.nativeEvent.text)}
-                                                />
+                            {openStores[store.id] && (
+                                <View style={styles.itemsList}>
+                                    {store.items.map((item: any) => (
+                                        <View key={item.id} style={styles.itemRow}>
+                                            <View style={styles.itemInfo}>
+                                                <Text style={styles.itemName}>{item.name}</Text>
+                                                <Text style={styles.aisleText}>โซน: {item.aisle_name || 'ทั่วไป'}</Text>
                                             </View>
-                                            <TouchableOpacity 
-                                                onPress={() => handleDeleteItem(item.id, item.name)}
-                                                style={styles.deleteBtn}
-                                            >
-                                                <FontAwesome5 name="trash-alt" size={14} color="#fca5a5" />
-                                            </TouchableOpacity>
+
+                                            <View style={styles.actionArea}>
+                                                <View style={styles.priceContainer}>
+                                                    <Text style={styles.priceLabel}>฿</Text>
+                                                    <TextInput
+                                                        style={styles.priceInput}
+                                                        keyboardType="decimal-pad"
+                                                        defaultValue={item.last_price?.toString() || "0"}
+                                                        onBlur={(e: any) => handleUpdatePrice(item.id, e.nativeEvent.text)}
+                                                        {...Platform.select({ web: { outlineStyle: 'none' } })}
+                                                    />
+                                                </View>
+                                                <TouchableOpacity 
+                                                    onPress={() => handleDeleteItem(item.id, item.name)}
+                                                    style={styles.deleteBtn}
+                                                >
+                                                    <FontAwesome5 name="trash-alt" size={14} color="#fca5a5" />
+                                                </TouchableOpacity>
+                                            </View>
                                         </View>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                    </View>
-                ))}
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+                    ))
+                )}
             </ScrollView>
         </SafeAreaView>
     );
