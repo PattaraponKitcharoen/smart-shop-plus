@@ -6,6 +6,7 @@ import {
   FlatList, // 🚩 เพิ่ม
   Keyboard // 🚩 เพิ่ม
   ,
+
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -153,34 +154,42 @@ export default function ManageAislesScreen() {
         <FontAwesome5 name="plus" size={20} color="#fff" />
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
-        {/* 🚩 ใช้ KeyboardAvoidingView เพื่อดันเนื้อหาขึ้นหนีแป้นพิมพ์ */}
+      <Modal 
+        visible={modalVisible} 
+        animationType="fade" 
+        transparent 
+        onRequestClose={() => setModalVisible(false)}
+      >
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={styles.modalOverlay}
         >
+          {/* 1. ชั้นฉากหลัง: แตะเพื่อปิดคีย์บอร์ด (ใช้สไตล์ absoluteFill เพื่อให้เต็มหน้าจอแต่ไม่ทับ Content) */}
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{editingAisle ? 'แก้ไข' : 'เพิ่ม'}โซน</Text>
-              <TextInput
-                style={styles.input}
-                value={inputText}
-                onChangeText={setInputText}
-                placeholder="ระบุชื่อโซน..."
-                placeholderTextColor="#9ca3af"
-                autoFocus={Platform.OS !== 'web'} // 🚩 autoFocus เฉพาะมือถือ
-                {...Platform.select({ web: { outlineStyle: 'none' } })}
-              />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.btnTextCancel}>ยกเลิก</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
-                  <Text style={styles.btnTextSave}>บันทึก</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <View style={StyleSheet.absoluteFill} />
           </TouchableWithoutFeedback>
+
+          {/* 2. ชั้นเนื้อหา: แยกออกมาเป็นอิสระเพื่อให้รับแรงกด (Touch) ได้ตามปกติ */}
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{editingAisle ? 'แก้ไข' : 'เพิ่ม'}โซน</Text>
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="ระบุชื่อโซน..."
+              placeholderTextColor="#9ca3af"
+              autoFocus={Platform.OS !== 'web'} 
+              {...Platform.select({ web: { outlineStyle: 'none' } })}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnSave} onPress={handleSave}>
+                <Text style={styles.btnTextSave}>บันทึก</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>

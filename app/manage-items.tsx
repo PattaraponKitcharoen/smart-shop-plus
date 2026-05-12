@@ -5,6 +5,8 @@ import {
     Alert, // 🚩 เพิ่ม
     Keyboard // 🚩 เพิ่ม
     ,
+
+
     KeyboardAvoidingView,
     LayoutAnimation,
     Modal,
@@ -192,35 +194,39 @@ export default function ManageItemsScreen() {
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
                     style={styles.modalOverlay}
                 >
+                    {/* 1. ชั้นฉากหลัง: แตะเพื่อปิดคีย์บอร์ด (แยกชั้นออกมาไม่ให้ทับ Content) */}
                     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>แก้ไขราคาสินค้า</Text>
-                            <Text style={styles.modalSubTitle}>{editingItem?.name}</Text>
-                            
-                            <View style={styles.modalInputWrapper}>
-                                <Text style={styles.modalCurrency}>฿</Text>
-                                <TextInput
-                                    style={styles.modalInput}
-                                    value={tempPrice}
-                                    onChangeText={setTempPrice}
-                                    placeholder="0.00"
-                                    placeholderTextColor="#d1d5db"
-                                    keyboardType="decimal-pad"
-                                    autoFocus={Platform.OS !== 'web'} // 🚩 autoFocus เฉพาะมือถือ
-                                    {...Platform.select({ web: { outlineStyle: 'none' } })}
-                                />
-                            </View>
-
-                            <View style={styles.modalButtons}>
-                                <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
-                                    <Text style={styles.btnTextCancel}>ยกเลิก</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.btnSave} onPress={handleSavePrice}>
-                                    <Text style={styles.btnTextSave}>บันทึก</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                        <View style={StyleSheet.absoluteFill} />
                     </TouchableWithoutFeedback>
+
+                    {/* 2. ชั้นเนื้อหา: แยกออกมาให้รับแรงกด (Touch) ได้ตามปกติ */}
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>แก้ไขราคาสินค้า</Text>
+                        <Text style={styles.modalSubTitle}>{editingItem?.name}</Text>
+                        
+                        <View style={styles.modalInputWrapper}>
+                            <Text style={styles.modalCurrency}>฿</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                value={tempPrice}
+                                onChangeText={setTempPrice}
+                                placeholder="0.00"
+                                placeholderTextColor="#d1d5db"
+                                keyboardType="decimal-pad"
+                                autoFocus={Platform.OS !== 'web'} 
+                                {...Platform.select({ web: { outlineStyle: 'none' } })}
+                            />
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity style={styles.btnCancel} onPress={() => setModalVisible(false)}>
+                                <Text style={styles.btnTextCancel}>ยกเลิก</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.btnSave} onPress={handleSavePrice}>
+                                <Text style={styles.btnTextSave}>บันทึก</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </KeyboardAvoidingView>
             </Modal>
         </SafeAreaView>
