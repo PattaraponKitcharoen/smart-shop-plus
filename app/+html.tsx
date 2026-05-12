@@ -4,19 +4,19 @@ export default function Root({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th">
       <head>
-        <link rel="manifest" href="/site.webmanifest" />
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
 
-        {/* 🚩 1. สำหรับ iOS Safari (Add to Home Screen) - เปลี่ยนชื่อไฟล์หนี Cache */}
-        <link rel="apple-touch-icon" href="/app-logo.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/app-logo.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/app-logo.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="/app-logo.png" />
+        {/* 🚩 1. สำหรับ iOS Safari (Add to Home Screen) - เปลี่ยนชื่อเป็น smart-icon.png */}
+        <link rel="apple-touch-icon" href="/smart-icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/smart-icon.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/smart-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/smart-icon.png" />
         
         {/* 🚩 2. สำหรับ Android Chrome และ Browser อื่นๆ */}
-        <link rel="icon" type="image/png" href="/app-logo.png" />
+        <link rel="icon" type="image/png" href="/smart-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
 
         {/* 🚩 3. ตั้งค่า Web App สำหรับ iOS ให้เหมือนแอปจริง */}
         <meta name="apple-mobile-web-app-title" content="Smart Shop" />

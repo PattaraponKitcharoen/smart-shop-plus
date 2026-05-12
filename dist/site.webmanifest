@@ -3,12 +3,12 @@
   "short_name": "Smart Shop",
   "icons": [
     {
-      "src": "/app-logo.png",
+      "src": "/smart-icon.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/app-logo.png",
+      "src": "/smart-icon.png",
       "sizes": "512x512",
       "type": "image/png"
     }
